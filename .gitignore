@@ -1,0 +1,15 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+frontend/node_modules/
+frontend/dist/
+agents/*/.venv/
+agents/*/web/node_modules/
+agents/*/*/web/node_modules/
+agents/*/amazon_copy/web_dist/
+agents/*/amazon_create/web_dist/
+agents/*/.pytest_cache/
+agents/*/.ruff_cache/

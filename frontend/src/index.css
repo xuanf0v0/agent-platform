@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+/* ── Lithos Dark Theme ──────────────────────────────────── */
+:root {
+  --lithos-bg: #000000;
+  --lithos-surface: #141414;
+  --lithos-surface-2: #1A1A1A;
+  --lithos-text: #FFFFFF;
+  --lithos-text-soft: rgba(255, 255, 255, 0.72);
+  --lithos-text-muted: rgba(255, 255, 255, 0.48);
+  --lithos-border: rgba(255, 255, 255, 0.14);
+  --lithos-border-strong: rgba(255, 255, 255, 0.22);
+  --lithos-cta: #E8702A;
+  --lithos-cta-hover: #D2611F;
+  --lithos-cta-active: #C45618;
+  --lithos-cta-text: #000000;
+  --lithos-success: #22C55E;
+  --lithos-error: #EF4444;
+  --lithos-warning: #EAB308;
+  --lithos-info: #3B82F6;
+  --lithos-radius: 16px;
+  --lithos-radius-lg: 20px;
+  --lithos-radius-pill: 9999px;
+  --lithos-font: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Segoe UI', sans-serif;
+}
+
+/* ── Base Styles ────────────────────────────────────────── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--lithos-bg);
+  color: var(--lithos-text);
+  font-family: var(--lithos-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* ── Utility Classes ────────────────────────────────────── */
+@layer components {
+  .card {
+    background: var(--lithos-surface);
+    border: 1px solid var(--lithos-border);
+    border-radius: var(--lithos-radius);
+    padding: 1.5rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .card:hover {
+    border-color: var(--lithos-border-strong);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  .btn-primary {
+    background: var(--lithos-cta);
+    color: var(--lithos-cta-text);
+    border: none;
+    border-radius: var(--lithos-radius-pill);
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .btn-primary:hover {
+    background: var(--lithos-cta-hover);
+  }
+  .btn-primary:active {
+    background: var(--lithos-cta-active);
+    transform: scale(0.98);
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--lithos-text);
+    border: 1px solid var(--lithos-border);
+    border-radius: var(--lithos-radius-pill);
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--lithos-border-strong);
+  }
+  .btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--lithos-text-soft);
+    border: none;
+    border-radius: var(--lithos-radius-pill);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .btn-ghost:hover {
+    color: var(--lithos-text);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .btn-danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--lithos-error);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: var(--lithos-radius-pill);
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+  }
+
+  .input-field {
+    background: var(--lithos-surface-2);
+    color: var(--lithos-text);
+    border: 1px solid var(--lithos-border);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-family: var(--lithos-font);
+    width: 100%;
+    transition: border-color 0.15s;
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: var(--lithos-cta);
+    box-shadow: 0 0 0 1px rgba(232, 112, 42, 0.3);
+  }
+  .input-field::placeholder {
+    color: var(--lithos-text-muted);
+  }
+
+  .select-field {
+    background: var(--lithos-surface-2);
+    color: var(--lithos-text);
+    border: 1px solid var(--lithos-border);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-family: var(--lithos-font);
+    width: 100%;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .select-field:focus {
+    outline: none;
+    border-color: var(--lithos-cta);
+  }
+
+  /* Toggle Switch */
+  .toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+  }
+  .toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 22px;
+    transition: background 0.2s;
+  }
+  .toggle-slider::before {
+    content: "";
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked + .toggle-slider {
+    background: var(--lithos-cta);
+  }
+  .toggle input:checked + .toggle-slider::before {
+    transform: translateX(18px);
+  }
+
+  /* Terminal / Log Viewer */
+  .terminal {
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: rgba(200, 200, 200, 0.9);
+    overflow-y: auto;
+    max-height: 400px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
