@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 from openai import APITimeoutError, OpenAI
@@ -36,8 +37,36 @@ class OpenAILLM:
     def complete(self, system: str, user: str, **kwargs: object) -> str:
         """Create one chat completion, requesting JSON output by default."""
         self._call_count += 1
-        json_mode = kwargs.pop("json_mode", True)
-        images = kwargs.pop("images", ())
+        request = self._request(system, user, kwargs)
+        try:
+            response = self._client.chat.completions.create(**request)
+        except APITimeoutError as exc:
+            raise TimeoutError from exc
+        return response.choices[0].message.content or ""
+
+    def stream(self, system: str, user: str, **kwargs: object) -> Iterator[str]:
+        """Yield text deltas from an OpenAI-compatible streaming response."""
+        self._call_count += 1
+        request = self._request(system, user, kwargs)
+        request["stream"] = True
+        try:
+            response = self._client.chat.completions.create(**request)
+            for chunk in response:
+                text = chunk.choices[0].delta.content if chunk.choices else None
+                if text:
+                    yield text
+        except APITimeoutError as exc:
+            raise TimeoutError from exc
+
+    def _request(
+        self,
+        system: str,
+        user: str,
+        kwargs: dict[str, object],
+    ) -> dict[str, Any]:
+        options = dict(kwargs)
+        json_mode = options.pop("json_mode", True)
+        images = options.pop("images", ())
         user_content: str | list[dict[str, Any]] = user
         if isinstance(images, (list, tuple)) and images:
             user_content = [{"type": "text", "text": user}]
@@ -55,15 +84,11 @@ class OpenAILLM:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_content},
             ],
-            "temperature": kwargs.pop("temperature", 0.4),
-            **kwargs,
+            "temperature": options.pop("temperature", 0.4),
+            **options,
         }
         if json_mode:
             request["response_format"] = {"type": "json_object"}
             if self._model in {"deepseek-v4-flash", "deepseek-v4-pro"}:
                 request["extra_body"] = {"thinking": {"type": "disabled"}}
-        try:
-            response = self._client.chat.completions.create(**request)
-        except APITimeoutError as exc:
-            raise TimeoutError from exc
-        return response.choices[0].message.content or ""
+        return request

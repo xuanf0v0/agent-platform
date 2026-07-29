@@ -25,7 +25,6 @@ _SELLERSPRITE_PREFERRED: Final[tuple[str, ...]] = (
 )
 _SELLERSPRITE_ASIN_PREFERRED: Final[tuple[str, ...]] = (
     "asin_detail",
-    "product_research",
 )
 _SELLERSPRITE_CATEGORY_PREFERRED: Final[tuple[str, ...]] = ("product_node",)
 _SORFTIME_PREFERRED: Final[tuple[str, ...]] = (

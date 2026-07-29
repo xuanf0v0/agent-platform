@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from pydantic import ValidationError
-
 from amazon_create.config import Settings
+from amazon_create.conversation.intake_parsing import (
+    extract_explicit_marketplace,
+    extract_labeled_product_asin,
+)
 from amazon_create.image_assets import images_for_session
 from amazon_create.llm import get_llm
 from amazon_create.pipeline.postflight import finalize_deliverable
@@ -24,6 +26,10 @@ from amazon_create.schemas.evidence import (
     merge_fact_rows,
     research_as_ledger_rows,
 )
+from amazon_create.schemas.stage_contracts import (
+    STAGE_OUTPUT_INSTRUCTIONS,
+    stage_payload_issues,
+)
 from amazon_create.schemas.workflow import (
     STAGE_LABEL_ZH,
     STAGE_ORDER,
@@ -32,6 +38,7 @@ from amazon_create.schemas.workflow import (
     StageArtifact,
 )
 from amazon_create.utils.json_extract import JsonExtractError, extract_json_object
+from pydantic import ValidationError
 
 _IMAGE_YES = frozenset(
     {
@@ -58,6 +65,13 @@ _IMAGE_TASKS = {
     "image analysis": "image_analysis",
 }
 _HUMAN_REVIEW = frozenset({"人工审核通过", "合规终审通过", "human review approved"})
+_STAGE_CONFIRMATIONS = {
+    CreationStage.AUDIENCE: "以上市场、目标受众和消费者需求分析是否认可？认可后进入产品资料解读阶段。",
+    CreationStage.PRODUCT: "以上产品参数、功能和消费者需求匹配分析是否认可？认可后进入竞品分析阶段。",
+    CreationStage.COMPETITOR: "以上竞品分析是否认可？认可后进入产品定位和卖点提炼阶段。",
+    CreationStage.SELLING_POINTS: "以上产品定位和5个核心卖点是否认可？认可后进入关键词调研和Listing创作阶段。",
+    CreationStage.FINAL_COPY: "请审核最终报告与可直接上传版本；认可后可进入图片流程或结束。",
+}
 _SENSITIVE_TERMS = frozenset(
     {
         "儿童",
@@ -123,7 +137,7 @@ def parse_brief_message(text: str, existing: ProductBrief | None = None) -> Prod
     blob = "\n".join(lines)
 
     product = _field(blob, r"(?:产品|产品名|product)\s*[:：]\s*(.+)")
-    market = _field(blob, r"(?:站点|市场|marketplace|market)\s*[:：]\s*(.+)")
+    market = extract_explicit_marketplace(blob)
     brand = _field(blob, r"(?:品牌|brand)\s*[:：]\s*(.+)")
     product_type = _field(blob, r"(?:产品类型|类目|product\s*type|category)\s*[:：]\s*(.+)")
     language = _field(blob, r"(?:语言|language)\s*[:：]\s*(.+)")
@@ -135,7 +149,7 @@ def parse_brief_message(text: str, existing: ProductBrief | None = None) -> Prod
         blob,
         r"^(?:竞品|competitors?|asin)\s*[:：]\s*(.+)$",
     )
-    product_asin = _field(blob, r"(?:产品\s*ASIN|product\s*asin)\s*[:：]\s*(B0[A-Z0-9]{8})")
+    product_asin = extract_labeled_product_asin(blob)
 
     if not product and lines:
         first = lines[0]
@@ -144,7 +158,7 @@ def parse_brief_message(text: str, existing: ProductBrief | None = None) -> Prod
 
     market_norm = (market or base.marketplace or "").strip()
     if market_norm:
-        market_norm = _MARKET_ALIASES.get(market_norm, market_norm.upper())
+        market_norm = market_norm.upper()
 
     competitor_asins = base.competitors
     if competitors:
@@ -295,12 +309,12 @@ def _extract_spec_pairs(specs: str) -> list[tuple[str, str]]:
     ):
         pairs.append((match.group(1).lower(), match.group(2).strip()))
     # bare patterns like 1/2 inch, 19 gauge
-    if re.search(r"\b\d+/\d+\s*inch\b", specs, re.I):
-        m = re.search(r"(\d+/\d+\s*inch)", specs, re.I)
+    if re.search(r"\b\d+/\d+\s*inch\b", specs, re.IGNORECASE):
+        m = re.search(r"(\d+/\d+\s*inch)", specs, re.IGNORECASE)
         if m:
             pairs.append(("mesh_opening", m.group(1)))
-    if re.search(r"\b\d+\s*gauge\b", specs, re.I):
-        m = re.search(r"(\d+\s*gauge)", specs, re.I)
+    if re.search(r"\b\d+\s*gauge\b", specs, re.IGNORECASE):
+        m = re.search(r"(\d+\s*gauge)", specs, re.IGNORECASE)
         if m:
             pairs.append(("gauge", m.group(1)))
     return pairs
@@ -345,6 +359,7 @@ def _research_for_session(runtime: Settings, session: CreationSession) -> dict[s
 def run_stage(
     session: CreationSession,
     settings: Settings | None = None,
+    research_context: dict[str, Any] | None = None,
 ) -> CreationSession:
     """Generate draft artifact for the current stage (awaiting approval)."""
     runtime = settings or Settings()
@@ -354,7 +369,16 @@ def run_stage(
         return session
 
     if stage == CreationStage.BRIEF:
-        return _run_brief_gate(session)
+        session = _run_brief_gate(session)
+        if not session.brief.required_context_missing():
+            artifact = session.artifact(CreationStage.BRIEF)
+            if artifact is not None:
+                session.set_artifact(artifact.model_copy(update={"approved": True}))
+            session.stage = CreationStage.AUDIENCE
+            session.status = "active"
+            session.revision += 1
+            return run_stage(session, settings=runtime, research_context=research_context)
+        return session
 
     if stage == CreationStage.IMAGE_HANDOFF:
         session.set_artifact(
@@ -383,7 +407,7 @@ def run_stage(
         include_image=stage in {CreationStage.IMAGE_ANALYSIS, CreationStage.IMAGE_PLAN},
     )
     session.active_rule_files = rules.files
-    research = _research_for_session(runtime, session)
+    research = research_context if research_context is not None else _research_for_session(runtime, session)
     # MCP rows enter ledger only as third-party market context
     for row in research_as_ledger_rows(research):
         session.brief = session.brief.with_fact(row)
@@ -407,6 +431,13 @@ def run_stage(
         session.last_message_zh = "阶段输出解析失败，请重试。"
         return session
 
+    contract_issues = stage_payload_issues(stage, payload)
+    if contract_issues:
+        session.status = "failed"
+        session.error = "stage_contract_incomplete"
+        session.last_message_zh = "阶段输出未满足工作流契约：" + "、".join(contract_issues)
+        return session
+
     # Force hypothesis labeling on audience percentages if any slipped in
     if stage == CreationStage.AUDIENCE:
         payload = _strip_unsubstantiated_percentages(payload, research)
@@ -415,11 +446,17 @@ def run_stage(
         deliverable, auth = finalize_deliverable(
             payload,
             brand=session.brief.brand,
+            marketplace=session.brief.marketplace,
             media_category=session.brief.media_category,
             listing_scope=session.brief.listing_scope,
             variation_values=session.brief.variation_values,
             sensitive_category=session.brief.sensitive_category,
             fact_ledger=session.brief.fact_ledger,
+            approved_artifacts={
+                key: artifact.payload
+                for key, artifact in session.artifacts.items()
+                if artifact.approved
+            },
         )
         session.deliverable = deliverable
         session.claim_authorization = auth
@@ -496,11 +533,15 @@ def run_stage(
         )
     )
     session.status = "awaiting_approval"
+    confirmation = _STAGE_CONFIRMATIONS.get(
+        stage,
+        "请确认当前阶段；或发送修改意见。",
+    )
     session.last_message_zh = (
         summary
         + "\n\n"
         + evidence_note
-        + "\n\n请回复「认可」进入下一门；或发送修改意见。\n"
+        + f"\n\n{confirmation}\n"
         + _checklist_block(session)
     )
     return session
@@ -549,6 +590,7 @@ def approve_stage(
     *,
     skip_competitor: bool = False,
     settings: Settings | None = None,
+    research_context: dict[str, Any] | None = None,
 ) -> CreationSession:
     """Mark current stage approved and advance to next gate."""
     runtime = settings or Settings()
@@ -577,7 +619,7 @@ def approve_stage(
             session.set_artifact(art.model_copy(update={"approved": True}))
         session.revision += 1
         session.stage = CreationStage.IMAGE_HANDOFF
-        return run_stage(session, settings=runtime)
+        return run_stage(session, settings=runtime, research_context=research_context)
 
     if stage == CreationStage.IMAGE_HANDOFF:
         # approve without explicit image choice → treat as skip images
@@ -595,7 +637,7 @@ def approve_stage(
             session.set_artifact(art.model_copy(update={"approved": True}))
         session.revision += 1
         session.stage = CreationStage.IMAGE_PLAN
-        return run_stage(session, settings=runtime)
+        return run_stage(session, settings=runtime, research_context=research_context)
 
     if stage == CreationStage.IMAGE_PLAN:
         if session.image_design_plan is None:
@@ -613,7 +655,7 @@ def approve_stage(
         session.set_artifact(art.model_copy(update={"approved": True}))
     session.revision += 1
 
-    skip = skip_competitor or not session.brief.competitors
+    skip = skip_competitor
     session.stage = next_stage(stage, skip_competitor=skip)
     if skip and stage == CreationStage.PRODUCT:
         # mark competitor skipped artifact for audit trail
@@ -626,7 +668,7 @@ def approve_stage(
                 evidence_notes_zh="竞品信息仅作结构参考，从未达到 product_confirmed。",
             )
         )
-    return run_stage(session, settings=runtime)
+    return run_stage(session, settings=runtime, research_context=research_context)
 
 
 def apply_user_message(
@@ -667,22 +709,23 @@ def apply_user_message(
             session.image_design_requested = False
             return approve_stage(session, settings=runtime)
 
-    if low in _IMAGE_YES or (
-        any(k in low for k in _IMAGE_YES)
-        and "不" not in text
-        and "no " not in low
-    ):
-        if session.stage in {CreationStage.IMAGE_HANDOFF, CreationStage.FINAL_COPY}:
-            if session.stage == CreationStage.FINAL_COPY:
-                session = approve_stage(session, settings=runtime)
-            session.image_design_requested = True
-            art = session.artifact(CreationStage.IMAGE_HANDOFF)
-            if art is not None:
-                session.set_artifact(art.model_copy(update={"approved": True}))
-            session.stage = CreationStage.IMAGE_ANALYSIS
-            session.status = "active"
-            session.revision += 1
-            return run_stage(session, settings=runtime)
+    image_requested = low in _IMAGE_YES or (
+        any(k in low for k in _IMAGE_YES) and "不" not in text and "no " not in low
+    )
+    if image_requested and session.stage in {
+        CreationStage.IMAGE_HANDOFF,
+        CreationStage.FINAL_COPY,
+    }:
+        if session.stage == CreationStage.FINAL_COPY:
+            session = approve_stage(session, settings=runtime)
+        session.image_design_requested = True
+        art = session.artifact(CreationStage.IMAGE_HANDOFF)
+        if art is not None:
+            session.set_artifact(art.model_copy(update={"approved": True}))
+        session.stage = CreationStage.IMAGE_ANALYSIS
+        session.status = "active"
+        session.revision += 1
+        return run_stage(session, settings=runtime)
 
     if low in {"跳过竞品", "skip competitor", "无竞品"}:
         session.brief = session.brief.model_copy(update={"competitors": ()})
@@ -742,6 +785,7 @@ def run_fast_path(
     deliverable, auth = finalize_deliverable(
         payload,
         brand=session.brief.brand,
+        marketplace=session.brief.marketplace,
         media_category=session.brief.media_category,
         listing_scope=session.brief.listing_scope,
         variation_values=session.brief.variation_values,
@@ -844,6 +888,8 @@ def _strip_unsubstantiated_percentages(
             return tuple(clean(item) for item in value)
         if not isinstance(value, str):
             return value
+        if "方向性估算" in value:
+            return value
 
         def replace(match: re.Match[str]) -> str:
             token = match.group(0)
@@ -875,6 +921,7 @@ def _system_prompt(stage: CreationStage, rule_content: str) -> str:
         f"Current stage:{stage.value}\n"
         f"{evidence_prompt_block()}\n"
         f"PACKAGED RULES:\n{rule_content}"
+        f"\nSTAGE OUTPUT CONTRACT:\n{STAGE_OUTPUT_INSTRUCTIONS.get(stage, '')}"
     )
 
 
@@ -904,10 +951,15 @@ def _user_prompt(
         f"user_notes:{session.brief.notes}\n"
         f"image_task_type:{session.image_task_type}\n"
         f"uploaded_image_count:{session.image_asset_count}\n"
-        "Respond with stage-appropriate JSON. "
-        "For final_copy include title, title_zh, item_highlights, item_highlights_zh, "
-        "bullets[{text,text_zh}], search_terms, product_description, "
-        "product_description_zh, shopping_questions[{question,answer_basis,answer_zh}], "
+        "Respond with every key in the stage output contract as JSON. "
+        "For final_copy include title_variants[{code,strategy_zh,title,title_zh,title_chars,"
+        "primary_keywords,item_highlights,item_highlights_zh,item_highlights_chars}], "
+        "recommended_variant, title, title_zh, item_highlights, item_highlights_zh, "
+        "bullets[{text,text_zh,purchase_intent_zh,covered_keywords,chars}], search_terms, "
+        "search_terms_chars, search_terms_bytes, product_description, product_description_chars, "
+        "product_description_zh, shopping_questions[{question,answer_basis,answer_zh,"
+        "listing_answered,location,clarity,missing_information}], compliance_risks[], return_risks[], "
+        "creation_logic_zh, final_report, "
         "a_plus_modules[{module,purpose,content}], keyword_intent_map{}, "
         "category_recommendations[{path,node_id_path,basis,verification}], "
         "claim_evidence_map[{claim,source,status}], "

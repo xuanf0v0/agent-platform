@@ -15,6 +15,7 @@ env/
 
 # Env / secrets
 .env
+.data/
 .env.*
 !.env.example
 

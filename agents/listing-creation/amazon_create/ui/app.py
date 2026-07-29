@@ -1,230 +1,375 @@
-"""Streamlit staged listing creation workbench (approval + evidence gates)."""
-
-from __future__ import annotations
+"""Conversational Streamlit workbench for Amazon Listing creation."""
 
 # pyright: reportUnusedCallResult=false
 
+from __future__ import annotations
+
+from collections import defaultdict
+from collections.abc import Callable
+
 import streamlit as st
-
 from amazon_create.config import Settings
-from amazon_create.pipeline.creation_pipeline import (
-    apply_user_message,
-    new_session,
-    run_stage,
+from amazon_create.conversation.service import ConversationService
+from amazon_create.schemas.conversation import (
+    CandidateStatus,
+    ConversationSnapshot,
+    DiscussionStatus,
+    SummaryStatus,
 )
-from amazon_create.schemas.workflow import STAGE_LABEL_ZH, CreationSession, CreationStage
-
-_THEME = """
-<style>
-:root {
-  --bg: #000000;
-  --surface: #141414;
-  --text: #ffffff;
-  --muted: rgba(255,255,255,0.72);
-  --cta: #e8702a;
-  --border: rgba(255,255,255,0.14);
-}
-html, body, [data-testid="stAppViewContainer"] {
-  background: var(--bg);
-  color: var(--text);
-}
-</style>
-"""
+from amazon_create.schemas.deliverable import CreationDeliverable
+from amazon_create.schemas.workflow import STAGE_LABEL_ZH, CreationStage
+from amazon_create.ui.theme import THEME_CSS
 
 
-def _session() -> CreationSession:
-    if "creation_session" not in st.session_state:
-        st.session_state.creation_session = new_session()
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "content": (
-                    "我是 Amazon Listing 创作助手（**审批门 + 证据控制**）。\n\n"
-                    "流程：Brief/事实台账 → 受众 → 产品解读 → 竞品 → 五大卖点 → "
-                    "关键词意图库 → 最终文案 → 是否主图+7辅图。\n\n"
-                    "请提供：产品: …\\n站点: US\\n规格: …\n\n"
-                    "指令：`认可` / `跳过竞品` / `直接输出` / `需要图片` / `不需要图片`。"
-                ),
-            }
-        ]
-    return st.session_state.creation_session
+@st.cache_resource
+def _service() -> ConversationService:
+    return ConversationService(Settings())
 
 
-def _settings() -> Settings:
-    return Settings()
-
-
-def _render_deliverable(session: CreationSession) -> None:
-    d = session.deliverable
-    if d is None:
+def _run_action(action: Callable[[], object]) -> None:
+    try:
+        action()
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"操作失败：{exc}")
         return
-    st.subheader("成稿（可复制）")
-    st.caption(
-        f"Title {d.title_chars}/75 · Item Highlights {d.item_highlights_chars}/125 · "
-        f"Search Terms {d.search_terms_bytes}/250 bytes · 政策 {d.policy_status}"
+    st.rerun()
+
+
+def _active_thread(service: ConversationService) -> str:
+    sessions = service.list_sessions()
+    known = {item["thread_id"] for item in sessions}
+    current = str(st.session_state.get("creation_thread_id") or "")
+    if current in known:
+        return current
+    snapshot = service.create_session()
+    st.session_state.creation_thread_id = snapshot.state.thread_id
+    return snapshot.state.thread_id
+
+
+def _render_session_manager(service: ConversationService, active_thread: str) -> None:
+    sessions = service.list_sessions()
+    titles = {item["thread_id"]: item["title"] for item in sessions}
+    thread_ids = list(titles)
+    selected = st.selectbox(
+        "历史会话",
+        thread_ids,
+        index=thread_ids.index(active_thread),
+        format_func=lambda value: titles.get(value, "新建 Listing"),
     )
-    if d.policy_status == "BLOCK":
-        st.error("证据/政策门拦截：不可作为上传终稿，请补事实或改写。")
-    st.markdown("**Title**")
-    st.code(d.title, language=None)
-    if d.title_zh:
-        st.caption(d.title_zh)
-    st.markdown("**Item Highlights**")
-    st.code(d.item_highlights, language=None)
-    if d.item_highlights_zh:
-        st.caption(d.item_highlights_zh)
-    for i, b in enumerate(d.bullets, 1):
-        st.markdown(f"**Bullet {i}**")
-        st.code(b.text, language=None)
-        if b.text_zh:
-            st.caption(b.text_zh)
-    st.markdown("**Search Terms**")
-    st.code(d.search_terms, language=None)
-    if d.product_description:
-        st.markdown("**Product Description**")
-        st.code(d.product_description, language=None)
-        if d.product_description_zh:
-            st.caption(d.product_description_zh)
-    if d.shopping_questions:
-        with st.expander("Alexa for Shopping 问题覆盖", expanded=False):
-            for item in d.shopping_questions:
+    if selected != active_thread:
+        st.session_state.creation_thread_id = selected
+        st.rerun()
+    left, right = st.columns(2)
+    if left.button("新建", use_container_width=True):
+        def create() -> None:
+            snapshot = service.create_session()
+            st.session_state.creation_thread_id = snapshot.state.thread_id
+
+        _run_action(create)
+    if right.button("删除", use_container_width=True):
+        def delete() -> None:
+            service.delete_session(active_thread)
+            remaining = service.list_sessions()
+            if remaining:
+                st.session_state.creation_thread_id = remaining[0]["thread_id"]
+            else:
+                snapshot = service.create_session()
+                st.session_state.creation_thread_id = snapshot.state.thread_id
+
+        _run_action(delete)
+    with st.expander("重命名会话"), st.form("rename-session"):
+        title = st.text_input("名称", value=titles.get(active_thread, "新建 Listing"))
+        if st.form_submit_button("保存", use_container_width=True):
+            _run_action(lambda: service.rename_session(active_thread, title))
+
+
+def _render_fact_sidebar(
+    _service: ConversationService,
+    snapshot: ConversationSnapshot,
+) -> None:
+    state = snapshot.state
+    confirmed = state.confirmed_candidates()
+    unresolved = state.unresolved_candidates()
+    st.markdown("### 对话进度")
+    summary_label = {
+        SummaryStatus.COLLECTING: "等待产品资料",
+        SummaryStatus.AWAITING_CONFIRMATION: "等待整体确认",
+        SummaryStatus.CONFIRMED: "事实摘要已确认",
+    }[state.fact_summary_status]
+    st.caption(summary_label)
+    current = state.current_block()
+    if current:
+        st.info(f"当前讨论：{current.title_zh}")
+    stage_blocks = [
+        item for item in state.discussion_blocks if item.stage == state.creation_session.stage.value
+    ]
+    if stage_blocks:
+        for item in stage_blocks:
+            mark = {
+                DiscussionStatus.CONFIRMED: "✓",
+                DiscussionStatus.ACTIVE: "▶",
+                DiscussionStatus.STALE: "!",
+                DiscussionStatus.PENDING: "○",
+            }[item.status]
+            st.write(f"{mark} {item.title_zh}")
+
+    st.divider()
+    st.markdown("### 待解决问题")
+    if unresolved:
+        grouped_pending: dict[str, list] = defaultdict(list)
+        for item in unresolved:
+            grouped_pending[item.group].append(item)
+        for group, rows in grouped_pending.items():
+            with st.expander(f"{group} · {len(rows)} 项", expanded=True):
+                for item in rows:
+                    status = "冲突" if item.status == CandidateStatus.CONFLICT else "待确认"
+                    current = f" · 当前：{item.value}" if item.value else " · 缺失"
+                    st.markdown(f"**○ {item.label_zh}** `{status}`{current}")
+                    st.caption(item.question_zh)
+                    if item.conflict_values:
+                        st.warning("冲突值：" + " / ".join(item.conflict_values))
+    else:
+        st.success("暂无待解决问题")
+
+    st.divider()
+    st.markdown("### 已确认事实")
+    if not confirmed:
+        st.caption("确认事实摘要后显示。")
+    else:
+        groups: dict[str, list] = defaultdict(list)
+        for item in confirmed:
+            groups[item.group].append(item)
+        for group, rows in groups.items():
+            with st.expander(f"{group} · {len(rows)} 项"):
+                for item in rows:
+                    st.markdown(f"**✓ {item.label_zh}**")
+                    st.caption(item.value)
+
+    st.divider()
+    st.markdown("### 规则辅助")
+    for hit in state.rule_hits:
+        st.write(f"• {hit}")
+    if state.react_turns:
+        st.divider()
+        st.markdown("### ReAct 研究记录")
+        for turn in state.react_turns[-4:]:
+            labels = "、".join(action.label_zh for action in turn.actions)
+            st.caption(f"{turn.stage} · {labels}")
+            for observation in turn.observations:
+                st.write(f"• {observation.summary_zh}")
+    if state.research_activity:
+        st.markdown("### 研究来源")
+        for row in state.research_activity[-8:]:
+            st.write(f"• {row}")
+
+
+def _render_deliverable(deliverable: CreationDeliverable) -> None:
+    st.markdown("## 可复制成稿")
+    st.caption(
+        f"Title {deliverable.title_chars}/75 · Highlights {deliverable.item_highlights_chars}/125 · "
+        f"Search Terms {deliverable.search_terms_bytes}/250 bytes · {deliverable.policy_status}"
+    )
+    if deliverable.policy_status == "BLOCK":
+        st.error("证据或政策门已拦截，当前内容不可作为上传终稿。")
+    st.markdown("### 三套 Title 与 Item Highlights")
+    for variant in deliverable.title_variants:
+        with st.expander(
+            f"版本 {variant.code} · {variant.strategy_zh} · {variant.title_chars}/75",
+            expanded=variant.code == deliverable.recommended_variant,
+        ):
+            st.code(variant.title, language=None)
+            st.caption(variant.title_zh)
+            st.code(variant.item_highlights, language=None)
+            st.caption(
+                f"Item Highlights {variant.item_highlights_chars}/125 · "
+                + "、".join(variant.primary_keywords)
+            )
+    st.markdown("### 可直接上传的最终版本")
+    fields = [
+        ("Title", deliverable.title, deliverable.title_zh),
+        ("Item Highlights", deliverable.item_highlights, deliverable.item_highlights_zh),
+    ]
+    fields.extend(
+        (f"Bullet {index}", bullet.text, bullet.text_zh)
+        for index, bullet in enumerate(deliverable.bullets, 1)
+    )
+    fields.extend(
+        [
+            ("Product Description", deliverable.product_description, deliverable.product_description_zh),
+            ("Backend Search Terms", deliverable.search_terms, ""),
+        ]
+    )
+    for label, text, translation in fields:
+        if not text:
+            continue
+        st.markdown(f"**{label}**")
+        st.code(text, language=None)
+        if translation:
+            st.caption(translation)
+        if label.startswith("Bullet"):
+            bullet = deliverable.bullets[int(label.split()[-1]) - 1]
+            st.caption(
+                f"购买意图：{bullet.purchase_intent_zh or '待确认'} · "
+                f"关键词：{'、'.join(bullet.covered_keywords) or '—'} · {bullet.chars} 字符"
+            )
+    with st.expander("语义、A+、类目与证据明细"):
+        if deliverable.shopping_questions:
+            st.markdown("### Rufus 问答覆盖")
+            for item in deliverable.shopping_questions:
                 st.markdown(f"**{item.question}**")
-                st.write(item.answer_basis)
-                if item.answer_zh:
-                    st.caption(item.answer_zh)
-    if d.a_plus_modules:
-        with st.expander("A+ / EBC 模块建议", expanded=False):
-            for item in d.a_plus_modules:
+                st.write(
+                    f"{'已覆盖' if item.listing_answered else '未覆盖'} · "
+                    f"{item.location or '待分配'} · {item.clarity}"
+                )
+                st.caption(item.answer_basis)
+        if deliverable.a_plus_modules:
+            st.markdown("### A+ / EBC")
+            for item in deliverable.a_plus_modules:
                 st.markdown(f"**{item.module}** · {item.purpose}")
                 st.write(item.content)
-    if d.category_recommendations:
-        with st.expander("类目 / Browse Node 候选", expanded=False):
-            for item in d.category_recommendations:
-                st.write(
-                    f"{item.path} · {item.node_id_path or 'nodeId 待查'} · "
-                    f"{item.verification}"
-                )
-    if d.keyword_intent_map:
-        with st.expander("关键词与意图布局", expanded=False):
-            st.json(d.keyword_intent_map)
-    if d.claim_evidence_map:
-        with st.expander("宣称与证据映射", expanded=False):
-            for item in d.claim_evidence_map:
+        if deliverable.category_recommendations:
+            st.markdown("### 类目候选")
+            for item in deliverable.category_recommendations:
+                st.write(f"{item.path} · {item.node_id_path or '待查'} · {item.verification}")
+        if deliverable.keyword_intent_map:
+            st.markdown("### 关键词与意图布局")
+            st.json(deliverable.keyword_intent_map)
+        if deliverable.claim_evidence_map:
+            st.markdown("### 宣称与证据")
+            for item in deliverable.claim_evidence_map:
                 st.write(f"{item.claim} → {item.source} · {item.status}")
-    if d.unresolved:
-        st.warning("待补: " + "；".join(d.unresolved))
-    if d.policy_issues:
-        with st.expander("政策 / 证据校验明细"):
-            for issue in d.policy_issues:
-                st.write(issue)
+        issues = [
+            *deliverable.unresolved,
+            *deliverable.compliance_notes,
+            *deliverable.policy_issues,
+        ]
+        if issues:
+            st.markdown("### 待补与合规")
+            for issue in issues:
+                st.write(f"• {issue}")
+    if deliverable.final_report:
+        with st.expander("完整二十段报告", expanded=False):
+            for title, content in deliverable.final_report.items():
+                st.markdown(f"### {title}")
+                _render_payload(content)
 
 
-def main() -> None:
-    st.set_page_config(page_title="Listing Creation", layout="wide")
-    st.markdown(_THEME, unsafe_allow_html=True)
-    st.title("Amazon Listing 创作")
-    st.caption(
-        "审批门：Brief → 受众 → 产品 → 竞品 → 卖点 → 关键词 → 成稿 → 图片交接"
-    )
+def _render_payload(payload: object) -> None:
+    """Render structured stage payloads as readable tables and sections."""
+    if isinstance(payload, list):
+        if payload and all(isinstance(item, dict) for item in payload):
+            st.dataframe(payload, use_container_width=True, hide_index=True)
+        elif payload:
+            for item in payload:
+                st.write(f"• {item}")
+        else:
+            st.caption("暂无可验证数据")
+        return
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            st.markdown(f"**{key}**")
+            _render_payload(value)
+        return
+    st.write(payload if payload not in {None, ""} else "待确认")
 
-    session = _session()
-    settings = _settings()
 
-    with st.sidebar:
-        st.header("审批进度")
-        for line in session.gate_checklist_zh():
-            st.text(line)
-        st.divider()
-        st.header("诊断")
-        label = STAGE_LABEL_ZH.get(session.stage, session.stage.value)
-        st.write(f"当前门: **{label}**")
-        st.write(f"状态: `{session.status}` · rev {session.revision}")
-        st.write(
-            f"产品: {session.brief.product_name or '—'} / "
-            f"{session.brief.marketplace or '—'}"
-        )
-        if session.deliverable is not None:
-            st.write(f"政策: `{session.deliverable.policy_status}`")
-        if session.claim_authorization is not None:
-            auth = session.claim_authorization
-            st.write(f"证据授权: `{'OK' if auth.allowed else 'BLOCK'}`")
-        st.write(f"已加载规则: `{len(session.active_rule_files)}` 份")
-        if session.brief.sensitive_category:
-            st.warning("敏感品类：最终稿必须人工合规终审")
-        with st.expander("证据等级", expanded=False):
-            for line in session.evidence_policy_zh():
-                st.caption(line)
-        with st.expander("事实台账", expanded=False):
-            if not session.brief.fact_ledger:
-                st.caption("（空）")
-            for row in session.brief.fact_ledger[:24]:
-                st.caption(
-                    f"[{row.tier.name}] {row.fact}={row.value or '—'} "
-                    f"({row.source_kind.value}/{row.status.value})"
-                )
-        if st.button("新建对话", use_container_width=True):
-            st.session_state.creation_session = new_session()
-            st.session_state.messages = [
-                {
-                    "role": "assistant",
-                    "content": "新对话已开始。请提供产品名和目标站点。",
-                }
-            ]
-            st.rerun()
-        if st.button("认可当前阶段", type="primary", use_container_width=True):
-            updated = apply_user_message(session, "认可", settings=settings)
-            st.session_state.creation_session = updated
-            st.session_state.messages.append({"role": "user", "content": "认可"})
-            st.session_state.messages.append(
-                {"role": "assistant", "content": updated.last_message_zh}
-            )
-            st.rerun()
-        if session.brief.sensitive_category and not session.human_review_confirmed:
-            if st.button("人工审核通过", use_container_width=True):
-                updated = apply_user_message(session, "人工审核通过", settings=settings)
-                st.session_state.creation_session = updated
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": updated.last_message_zh}
-                )
-                st.rerun()
+def _render_workflow_actions(service: ConversationService, snapshot: ConversationSnapshot) -> None:
+    state = snapshot.state
+    session = state.creation_session
+    if state.downstream_stale:
+        st.error(state.stale_reason_zh or "现有结果基于旧事实版本，终审已锁定。")
+        st.caption("请先在聊天中确认最新事实摘要；系统会自动重新进入受影响阶段。")
+        return
+    if state.phase not in {"workflow", "completed"}:
+        return
+    stage = session.stage
+    if stage == CreationStage.COMPLETED:
+        st.success("文案与所选图片流程已完成。")
+        return
+    st.caption("所有业务确认、修改和阶段推进均通过底部聊天完成。")
 
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
 
-    show_copy = session.deliverable is not None and session.stage in {
-        CreationStage.FINAL_COPY,
-        CreationStage.IMAGE_HANDOFF,
-        CreationStage.IMAGE_ANALYSIS,
-        CreationStage.IMAGE_PLAN,
-        CreationStage.COMPLETED,
-    }
-    if show_copy:
-        _render_deliverable(session)
-    if session.image_design_plan is not None:
-        st.subheader("主图 + 7 张辅图方案")
+def _render_stage_output(snapshot: ConversationSnapshot) -> None:
+    session = snapshot.state.creation_session
+    if session.deliverable:
+        _render_deliverable(session.deliverable)
+    if session.image_design_plan:
+        st.markdown("## 主图 + 7 张辅图")
         st.dataframe(
             [item.model_dump(mode="json") for item in session.image_design_plan.images],
             use_container_width=True,
         )
 
-    prompt = st.chat_input(
-        "Brief / 修改意见 / 认可 / 跳过竞品 / 直接输出 / 需要图片 / 不需要图片"
+
+def main() -> None:
+    st.set_page_config(page_title="Listing 创作 Agent", page_icon="✨", layout="wide")
+    st.markdown(THEME_CSS, unsafe_allow_html=True)
+    service = _service()
+    active_thread = _active_thread(service)
+    snapshot = service.snapshot(active_thread)
+    state = snapshot.state
+
+    with st.sidebar:
+        st.markdown("## Listing 创作")
+        _render_session_manager(service, active_thread)
+        st.divider()
+        _render_fact_sidebar(service, snapshot)
+
+    st.markdown(
+        "<section class='hero'><p class='eyebrow'>AMAZON LISTING CREATION · HUMAN VERIFIED</p>"
+        "<h1>对话式 Listing 创作 Agent</h1>"
+        "<p>整段输入，Agent 主导讨论；规则、事实、研究与阶段门禁持续辅助。</p></section>",
+        unsafe_allow_html=True,
     )
+    stage_label = STAGE_LABEL_ZH.get(
+        state.creation_session.stage,
+        state.creation_session.stage.value,
+    )
+    st.markdown(
+        "<div class='status-strip'>"
+        f"<span>会话 <strong>{state.title}</strong></span>"
+        f"<span>阶段 <strong>{stage_label}</strong></span>"
+        f"<span>事实版本 <strong>{state.facts_revision}</strong></span>"
+        f"<span>状态 <strong>{state.phase}</strong></span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    if state.error:
+        st.warning(state.error)
+    if state.is_legacy:
+        st.warning("该会话由旧架构创建，仅支持查看。请点击左侧“新建”进入全对话流程。")
+
+    for message in state.messages:
+        with st.chat_message(message.role):
+            st.markdown(message.content)
+
+    _render_workflow_actions(service, snapshot)
+    _render_stage_output(snapshot)
+
+    placeholder = "粘贴完整资料，或回复确认、修改意见和补充信息"
+    prompt = st.chat_input(placeholder, max_chars=64000, disabled=state.is_legacy)
     if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        updated = apply_user_message(session, prompt, settings=settings)
-        if (
-            updated.stage == CreationStage.BRIEF
-            and updated.artifact(CreationStage.BRIEF) is None
-            and updated.brief.is_ready
-        ):
-            updated = run_stage(updated, settings=settings)
-        st.session_state.creation_session = updated
-        st.session_state.messages.append(
-            {"role": "assistant", "content": updated.last_message_zh or "已处理。"}
-        )
-        st.rerun()
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        try:
+            with st.chat_message("assistant"):
+                progress = st.status("正在准备回复…", expanded=False)
+                response = st.empty()
+                rendered = ""
+                for event in service.stream_turn(state.thread_id, prompt):
+                    if event.kind == "status":
+                        progress.update(label=event.content, state="running")
+                    elif event.kind == "text":
+                        rendered += event.content
+                        response.markdown(rendered + "▍")
+                    elif event.kind == "done":
+                        response.markdown(rendered)
+                        progress.update(label="回复已生成", state="complete")
+        except Exception as exc:  # noqa: BLE001
+            progress.update(label="生成失败", state="error")
+            st.error(f"操作失败：{exc}")
+        else:
+            st.rerun()
 
 
 if __name__ == "__main__":

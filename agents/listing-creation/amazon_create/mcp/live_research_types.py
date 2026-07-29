@@ -26,7 +26,12 @@ class ResearchItem(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, extra="forbid")
 
-    kind: Literal["keyword", "market_metric"]
+    kind: Literal[
+        "keyword",
+        "market_metric",
+        "product_attribute",
+        "category_candidate",
+    ]
     key: NonBlank
     value: NonBlank
     provider: NonBlank

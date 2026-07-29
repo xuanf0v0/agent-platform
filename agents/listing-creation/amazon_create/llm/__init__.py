@@ -17,7 +17,7 @@ def get_llm(settings: Settings | None = None, *, role: str = "writer") -> LLMCli
     runtime = settings or config_module.settings
     if runtime.mock:
         return MockLLM(role=role)
-    from amazon_create.llm.openai_compat import OpenAILLM  # noqa: PLC0415
+    from amazon_create.llm.openai_compat import OpenAILLM
 
     key = runtime.effective_api_key
     if not key:

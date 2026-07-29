@@ -1,4 +1,4 @@
-"""Agent Manager — unified management interface for packaged React agents."""
+"""Agent Manager — unified management interface for packaged local agents."""
 
 from __future__ import annotations
 

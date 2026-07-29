@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +14,25 @@ class BulletDeliverable(BaseModel):
 
     text: str
     text_zh: str = ""
+    purchase_intent_zh: str = ""
+    covered_keywords: tuple[str, ...] = ()
+    chars: int = 0
+
+
+class TitleVariant(BaseModel):
+    """One compliant Title and Item Highlights direction."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: Literal["A", "B", "C"]
+    strategy_zh: str
+    title: str
+    title_zh: str = ""
+    title_chars: int = 0
+    primary_keywords: tuple[str, ...] = ()
+    item_highlights: str
+    item_highlights_zh: str = ""
+    item_highlights_chars: int = 0
 
 
 class ShoppingQuestion(BaseModel):
@@ -24,6 +43,34 @@ class ShoppingQuestion(BaseModel):
     question: str
     answer_basis: str = ""
     answer_zh: str = ""
+    listing_answered: bool = False
+    location: str = ""
+    clarity: str = "待确认"
+    missing_information: str = ""
+
+
+class RiskItem(BaseModel):
+    """One compliance or return-risk finding."""
+
+    model_config = ConfigDict(frozen=True)
+
+    risk_type: str
+    issue: str
+    level: Literal["低", "中", "高", "BLOCK"] = "中"
+    recommended_location: str = "Product Description"
+    needs_confirmation: bool = False
+
+
+class UploadReadyCopy(BaseModel):
+    """Only fields that can be copied to Seller Central."""
+
+    model_config = ConfigDict(frozen=True)
+
+    title: str = ""
+    item_highlights: str = ""
+    bullets: tuple[str, ...] = ()
+    product_description: str = ""
+    search_terms: str = ""
 
 
 class PlusModule(BaseModel):
@@ -97,12 +144,21 @@ class CreationDeliverable(BaseModel):
     item_highlights: str
     item_highlights_zh: str = ""
     item_highlights_chars: int = 0
+    title_variants: list[TitleVariant] = Field(default_factory=list, min_length=1, max_length=3)
+    recommended_variant: Literal["A", "B", "C"] = "A"
     bullets: list[BulletDeliverable] = Field(min_length=1, max_length=5)
     search_terms: str = ""
+    search_terms_chars: int = 0
     search_terms_bytes: int = 0
     product_description: str = ""
     product_description_zh: str = ""
+    product_description_chars: int = 0
     shopping_questions: list[ShoppingQuestion] = Field(default_factory=list)
+    compliance_risks: list[RiskItem] = Field(default_factory=list)
+    return_risks: list[RiskItem] = Field(default_factory=list)
+    creation_logic_zh: str = ""
+    final_report: dict[str, Any] = Field(default_factory=dict)
+    upload_ready: UploadReadyCopy = Field(default_factory=UploadReadyCopy)
     a_plus_modules: list[PlusModule] = Field(default_factory=list)
     keyword_intent_map: dict[str, list[str]] = Field(default_factory=dict)
     category_recommendations: list[CategoryRecommendation] = Field(default_factory=list)

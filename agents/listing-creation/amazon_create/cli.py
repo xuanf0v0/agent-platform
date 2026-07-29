@@ -46,8 +46,10 @@ def fast(
                 "item_highlights": d.item_highlights,
                 "bullets": [b.text for b in d.bullets],
                 "search_terms": d.search_terms,
-                "policy_status": d.policy_status,
-                "evidence_allowed": None if auth is None else auth.allowed,
+                "policy_status": "BLOCK",
+                "evidence_allowed": False,
+                "confirmation_required": True,
+                "warning": "CLI 缺少逐事实人工确认，仅供开发预览，不可上传。",
                 "blocked_claims": [] if auth is None else list(auth.blocked_claims),
                 "stage": session.stage.value,
                 "counts": {

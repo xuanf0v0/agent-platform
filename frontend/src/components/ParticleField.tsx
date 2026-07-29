@@ -18,21 +18,37 @@ export default function ParticleField() {
     const context = canvas.getContext('2d');
     if (!context) return;
 
+    const shell = canvas.closest<HTMLElement>('.app-shell');
+
     let frameId = 0;
     let width = 0;
     let height = 0;
+    let minimumSpacing = 40;
     const pointer = { x: -1000, y: -1000, active: false };
     let particles: Particle[] = [];
 
     const createParticles = () => {
-      const count = Math.min(72, Math.max(32, Math.floor((width * height) / 24000)));
-      particles = Array.from({ length: count }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        velocityX: (Math.random() - 0.5) * 0.22,
-        velocityY: (Math.random() - 0.5) * 0.22,
-        radius: 0.7 + Math.random() * 1.2,
-      }));
+      const count = Math.min(148, Math.max(68, Math.floor((width * height) / 12500)));
+      minimumSpacing = Math.max(34, Math.min(58, Math.sqrt((width * height) / count) * 0.42));
+      particles = [];
+
+      for (let index = 0; index < count; index += 1) {
+        let x = Math.random() * width;
+        let y = Math.random() * height;
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          const isSpaced = particles.every((particle) => Math.hypot(particle.x - x, particle.y - y) >= minimumSpacing);
+          if (isSpaced) break;
+          x = Math.random() * width;
+          y = Math.random() * height;
+        }
+        particles.push({
+          x,
+          y,
+          velocityX: (Math.random() - 0.5) * 0.22,
+          velocityY: (Math.random() - 0.5) * 0.22,
+          radius: 1.25 + Math.random() * 1.85,
+        });
+      }
     };
 
     const resize = () => {
@@ -51,12 +67,20 @@ export default function ParticleField() {
       pointer.x = event.clientX;
       pointer.y = event.clientY;
       pointer.active = true;
+      shell?.style.setProperty('--pointer-x', `${event.clientX}px`);
+      shell?.style.setProperty('--pointer-y', `${event.clientY}px`);
+      shell?.style.setProperty('--network-shift-x', `${(event.clientX - window.innerWidth / 2) * 0.012}px`);
+      shell?.style.setProperty('--network-shift-y', `${(event.clientY - window.innerHeight / 2) * 0.012}px`);
+      shell?.style.setProperty('--pointer-active', '1');
     };
 
     const clearPointer = () => {
       pointer.active = false;
       pointer.x = -1000;
       pointer.y = -1000;
+      shell?.style.setProperty('--pointer-active', '0');
+      shell?.style.setProperty('--network-shift-x', '0px');
+      shell?.style.setProperty('--network-shift-y', '0px');
     };
 
     const drawConnection = (first: Particle, secondX: number, secondY: number, opacity: number) => {
@@ -64,7 +88,7 @@ export default function ParticleField() {
       context.moveTo(first.x, first.y);
       context.lineTo(secondX, secondY);
       context.strokeStyle = `rgba(34, 211, 238, ${opacity})`;
-      context.lineWidth = 0.55;
+      context.lineWidth = 0.9;
       context.stroke();
     };
 
@@ -76,11 +100,11 @@ export default function ParticleField() {
           const pointerX = pointer.x - particle.x;
           const pointerY = pointer.y - particle.y;
           const pointerDistance = Math.hypot(pointerX, pointerY);
-          if (pointerDistance < 170 && pointerDistance > 0) {
-            const attraction = (1 - pointerDistance / 170) * 0.004;
+          if (pointerDistance < 230 && pointerDistance > 0) {
+            const attraction = (1 - pointerDistance / 230) * 0.006;
             particle.velocityX += pointerX * attraction * 0.012;
             particle.velocityY += pointerY * attraction * 0.012;
-            drawConnection(particle, pointer.x, pointer.y, (1 - pointerDistance / 170) * 0.16);
+            drawConnection(particle, pointer.x, pointer.y, (1 - pointerDistance / 230) * 0.36);
           }
         }
 
@@ -96,14 +120,23 @@ export default function ParticleField() {
 
         context.beginPath();
         context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-        context.fillStyle = 'rgba(165, 243, 252, 0.48)';
+        context.fillStyle = 'rgba(165, 243, 252, 0.86)';
         context.fill();
 
         for (let neighborIndex = index + 1; neighborIndex < particles.length; neighborIndex += 1) {
           const neighbor = particles[neighborIndex];
-          const distance = Math.hypot(neighbor.x - particle.x, neighbor.y - particle.y);
-          if (distance < 115) {
-            drawConnection(particle, neighbor.x, neighbor.y, (1 - distance / 115) * 0.075);
+          const deltaX = neighbor.x - particle.x;
+          const deltaY = neighbor.y - particle.y;
+          const distance = Math.hypot(deltaX, deltaY);
+          if (distance > 0 && distance < minimumSpacing) {
+            const repulsion = (1 - distance / minimumSpacing) * 0.006;
+            particle.velocityX -= (deltaX / distance) * repulsion;
+            particle.velocityY -= (deltaY / distance) * repulsion;
+            neighbor.velocityX += (deltaX / distance) * repulsion;
+            neighbor.velocityY += (deltaY / distance) * repulsion;
+          }
+          if (distance < 158) {
+            drawConnection(particle, neighbor.x, neighbor.y, (1 - distance / 158) * 0.2);
           }
         }
       });

@@ -2,11 +2,16 @@
 
 从 0 到 1 创建 Amazon Listing，并由 Agent Manager 统一启动和管理。
 
-- **默认审批门**：Brief/事实台账 → 受众 → 产品解读 → 竞品 → 五大卖点 → 关键词意图库 → 最终文案 → 图片组分析 → 主图+7辅图方案
+- **长提示词输入**：首轮可直接粘贴完整产品提示词、说明书和规格资料；Agent 会拆分提取基础信息与最多 128 条原子事实
+- **全程对话**：首轮事实以一份完整摘要统一确认；缺失、歧义、冲突、阶段认可和修改意见都通过聊天处理，侧栏仅持续展示事实、问题、规则、研究和进度
+- **分块审批门**：事实摘要 → 市场与受众 → 产品解读 → 竞品 → 五大卖点 → 关键词 → Listing；每个阶段按小块讨论并保持硬顺序
+- **受控 ReAct**：每次需要生成或切换阶段时，计划器只可选择市场研究、ASIN 公开快照或继续当前阶段；最多执行两项白名单工具，并在侧栏保留动作与观察记录，不展示思维链
 - **证据等级**：Amazon 官方 > 法律安全 > 已确认产品资料 > 品牌后台 > 第三方 MCP > 竞品/评论 > 假设；低等级不能覆盖高等级；无来源数字/认证/性能不得进终稿
-- **完整输出**：Title、Item Highlights、5 Bullets、Description、Search Terms、Alexa 问题覆盖、A+/EBC、关键词意图图、类目候选、宣称证据表、合规提示
+- **完整输出**：二十段研究与创作报告、3 套 Title + Item Highlights、最终推荐稿、5 Bullets、Description、Search Terms、Rufus 十问、合规与退货风险及独立可上传版本
 - **规则路由**：运行时强制加载政策基线、创建流程、COSMO/Alexa 规则，并按产品类型加载 `Downloads/c` 对应品类 reference
 - **研究路由**：按目标站点请求市场数据；产品和竞品 ASIN 独立调研；SellerSprite 类目候选始终标记为待 Amazon 页面/后台人工验证
+- **身份提取**：产品 ASIN 与目标站点只接受明确标签；`核心市场词`、报告中的 `US` 或未标注子体编号不会被误当成站点/产品 ASIN
+- **ASIN 连通**：确认产品 ASIN 和站点后，在市场/竞品等相关阶段按需调用 SellerSprite `asin_detail`；公开快照只作为第三方研究，不会自动覆盖已确认产品事实
 - **图片流程**：优先使用产品/竞品 ASIN 研究图片组；无法获取时才请求上传，分析确认后生成 1 主图 + 7 辅图及八维评分
 - **敏感品类**：儿童、婴幼儿、食品、补剂、医疗、化妆品、健康、安全及电子认证相关产品必须人工终审
 - **规则**：2026-07-27 后非 media Title ≤75、Item Highlights ≤125、Search Terms ≤250 UTF-8 bytes
@@ -25,15 +30,19 @@ pip install -e ".[dev]"
 
 ## Run
 
-从 Agent Manager 主界面启动 `Listing 创作 Agent`。React 页面和 Python API 由管理器统一运行。
+从 Agent Manager 主界面启动 `Listing 创作 Agent`。管理器直接启动 Streamlit 页面。
 
-启动前请配置 `.env`（见 `.env.example`）中的真实模型 API Key。真实市场调研还需至少一个 MCP Key；没有 MCP Key 时系统只输出明确标注的定性假设，不会使用演示数据冒充研究结果。
+对话、提问清单、已确认事实和流程 checkpoint 默认保存在 `.data/listing_creation.sqlite3`。修改事实并确认新摘要后，系统保留不受影响的已批准阶段，并从最早受影响阶段自动重新开始。
 
-## CLI
+启动前请配置 `.env`（见 `.env.example`）中的真实模型 API Key。真实市场调研还需至少一个 MCP Key；没有 MCP Key 时系统只输出明确标注的定性假设，不会使用演示数据冒充研究结果。SellerSprite、Sorftime、SIF 及两个可选写作 MCP 的配置项与优化 Agent 保持一致。
+
+## CLI（开发辅助）
 
 ```bash
 amz-create fast --product "Hardware Cloth" --market US --specs "..." --live
 ```
+
+CLI 无人工确认界面，因此输出始终按不可上传草稿处理；生产创作请使用 Streamlit。
 
 ## Resources
 
@@ -61,13 +70,4 @@ cannot authorize private product/safety claims.
 
 ```bash
 pytest -q
-```
-## React Build
-
-React + TypeScript SPA 复用现有 Python 创作流水线。修改页面后构建生产包：
-
-```bash
-cd web
-npm install
-npm run build
 ```

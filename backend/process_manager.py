@@ -1,4 +1,4 @@
-"""Process manager for packaged React and Python API agents."""
+"""Process manager for packaged local agents."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class ProcessManager:
         return result
 
     async def start(self, agent_id: str) -> ProcessInfo:
-        """Build the React app when needed and start its Python API."""
+        """Prepare optional frontend assets and start the configured agent."""
         agent = get_agent(agent_id)
         if agent is None:
             raise ValueError(f"Unknown agent: {agent_id}")

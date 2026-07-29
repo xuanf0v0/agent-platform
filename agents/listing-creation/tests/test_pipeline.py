@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+
 from amazon_create.config import Settings
+from amazon_create.mcp.live_research_call import _tool_arguments
+from amazon_create.mcp.live_research_data import normalize_tool_payload
 from amazon_create.pipeline.creation_pipeline import (
     apply_user_message,
     new_session,
@@ -19,6 +23,7 @@ from amazon_create.schemas.evidence import (
     merge_fact_rows,
 )
 from amazon_create.schemas.workflow import CreationStage
+from pydantic import SecretStr
 
 
 def test_parse_brief_ready() -> None:
@@ -58,15 +63,11 @@ def test_staged_approve_flow() -> None:
         "父子体: parent\n媒体类目: no\n规格: A4 mesh bag",
         settings=settings,
     )
-    assert session.stage == CreationStage.BRIEF
-    session = apply_user_message(session, "认可", settings=settings)
     assert session.stage == CreationStage.AUDIENCE
     for _ in range(12):
         if session.stage == CreationStage.COMPLETED:
             break
-        if session.stage == CreationStage.COMPETITOR:
-            session = apply_user_message(session, "跳过竞品", settings=settings)
-        elif session.stage == CreationStage.IMAGE_HANDOFF:
+        if session.stage == CreationStage.IMAGE_HANDOFF:
             session = apply_user_message(session, "不需要图片", settings=settings)
         else:
             session = apply_user_message(session, "认可", settings=settings)
@@ -87,10 +88,7 @@ def test_image_handoff_yes() -> None:
     for _ in range(14):
         if session.stage == CreationStage.IMAGE_HANDOFF:
             break
-        if session.stage == CreationStage.COMPETITOR:
-            session = apply_user_message(session, "跳过竞品", settings=settings)
-        else:
-            session = apply_user_message(session, "认可", settings=settings)
+        session = apply_user_message(session, "认可", settings=settings)
     assert session.stage == CreationStage.IMAGE_HANDOFF
     session = apply_user_message(session, "需要图片", settings=settings)
     assert session.stage == CreationStage.IMAGE_ANALYSIS
@@ -116,10 +114,7 @@ def test_image_skip_from_final_copy() -> None:
     for _ in range(14):
         if session.stage == CreationStage.FINAL_COPY:
             break
-        if session.stage == CreationStage.COMPETITOR:
-            session = apply_user_message(session, "跳过竞品", settings=settings)
-        else:
-            session = apply_user_message(session, "认可", settings=settings)
+        session = apply_user_message(session, "认可", settings=settings)
     assert session.stage == CreationStage.FINAL_COPY
     session = apply_user_message(session, "不需要图片", settings=settings)
     assert session.stage == CreationStage.COMPLETED
@@ -208,7 +203,8 @@ def test_mock_keywords_stage_returns_keywords_payload() -> None:
         "search_terms, unresolved[], notes_zh."
     )
     payload = _stage_payload(prompt)
-    assert "core_keywords" in payload
+    assert len(payload["top20_roots"]) == 20
+    assert len(payload["top20_keywords"]) == 20
     assert "title" not in payload
 
 
@@ -234,6 +230,10 @@ def test_extended_deliverable_fields_are_preserved() -> None:
     assert session.deliverable.a_plus_modules
     assert session.deliverable.keyword_intent_map
     assert session.deliverable.category_recommendations
+    assert len(session.deliverable.title_variants) == 3
+    assert len(session.deliverable.shopping_questions) == 10
+    assert len(session.deliverable.final_report) == 20
+    assert session.deliverable.upload_ready.title == session.deliverable.title
 
 
 def test_sensitive_category_requires_human_review() -> None:
@@ -276,6 +276,101 @@ def test_marketplace_language_and_asins_are_parsed() -> None:
     assert brief.variation_values == {"color": "blue", "size": "A4"}
 
 
+def test_parse_brief_does_not_treat_market_metric_label_as_marketplace() -> None:
+    brief = parse_brief_message(
+        "细分类目\nHanging Wall Files | SellerSprite,US,ASIN详情|\n"
+        "核心市场词|'wall file organizer'|SIF关键词信号|"
+    )
+
+    assert brief.marketplace == ""
+    assert brief.product_asin == ""
+
+
+def test_sellersprite_nested_request_arguments_include_query_market_and_page() -> None:
+    schema = json.dumps(
+        {
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "object",
+                    "properties": {
+                        "keyword": {"type": "string"},
+                        "marketplace": {"type": "string"},
+                        "page": {"type": "integer"},
+                        "size": {"type": "integer"},
+                    },
+                    "required": ["marketplace"],
+                }
+            },
+            "required": ["request"],
+        }
+    )
+
+    assert _tool_arguments(schema, "wall file organizer", marketplace="US") == {
+        "request": {
+            "keyword": "wall file organizer",
+            "marketplace": "US",
+            "page": 1,
+            "size": 20,
+        }
+    }
+
+
+def test_sellersprite_asin_and_keyword_payloads_are_structured() -> None:
+    asin_payload = json.dumps(
+        {
+            "code": "OK",
+            "data": {
+                "asin": "B0FR8X1S8Y",
+                "title": "Hanging Wall File Organizer",
+                "brand": "ReePlan",
+                "marketplace": "US",
+                "price": 17.88,
+                "rating": 4.4,
+                "ratings": 361,
+                "nodeLabelPath": "Office Products:Hanging Wall Files",
+                "features": ["Five tiers", "Wall mounted"],
+            },
+        }
+    )
+    asin = normalize_tool_payload(
+        provider="sellersprite",
+        tool="asin_detail",
+        output_schema_json="",
+        payload_json=asin_payload,
+    )
+    attributes = {item.key: item.value for item in asin.items}
+    assert attributes["asin"] == "B0FR8X1S8Y"
+    assert attributes["brand"] == "ReePlan"
+    assert attributes["node_label_path"] == "Office Products:Hanging Wall Files"
+
+    keyword_payload = json.dumps(
+        {
+            "code": "OK",
+            "data": {
+                "items": [
+                    {
+                        "keyword": "wall file organizer",
+                        "searches": 26601,
+                        "monopolyClickRate": 18.5,
+                        "products": 277,
+                    }
+                ]
+            },
+        }
+    )
+    keyword = normalize_tool_payload(
+        provider="sellersprite",
+        tool="keyword_miner",
+        output_schema_json="",
+        payload_json=keyword_payload,
+    )
+    values = {(item.kind, item.key): item.value for item in keyword.items}
+    assert values[("keyword", "keyword")] == "wall file organizer"
+    assert values[("market_metric", "wall file organizer:search_volume")] == "26601"
+    assert values[("market_metric", "wall file organizer:product_count")] == "277"
+
+
 def test_media_title_is_not_clamped_to_non_media_limit() -> None:
     title = "A" * 90
     deliverable, _ = finalize_deliverable(
@@ -309,7 +404,12 @@ def test_no_credentials_never_uses_fixture_market_data() -> None:
     from amazon_create.research_bridge import load_research_context
 
     research = load_research_context(
-        Settings(mock=False),
+        Settings(
+            mock=False,
+            SELLERSPRITE_MCP_KEY=SecretStr(""),
+            SORFTIME_MCP_KEY=SecretStr(""),
+            SIF_MCP_KEY=SecretStr(""),
+        ),
         product_name="Mesh Zipper Pouch",
         marketplace="UK",
         specs="A4",

@@ -20,6 +20,8 @@ def build_research_context(
     max_gaps: int = 12,
     max_cited: int = 32,
     max_call_snippets: int = 6,
+    max_product_attributes: int = 32,
+    max_category_candidates: int = 24,
 ) -> dict[str, Any]:
     """Build a JSON-safe research brief for every automatic-pipeline layer.
 
@@ -28,6 +30,8 @@ def build_research_context(
     """
     keywords = list(research.allowed_keywords)[:max_keywords]
     metrics: list[dict[str, str]] = []
+    product_attributes: list[dict[str, str]] = []
+    category_candidates: list[dict[str, str]] = []
     cited: list[dict[str, str]] = []
     seen_metrics: set[tuple[str, str, str]] = set()
     for item in research.items:
@@ -40,6 +44,28 @@ def build_research_context(
                         "provider": item.provider,
                         "tool": item.tool,
                         "use_for": "seo_and_backend_terms",
+                    }
+                )
+            continue
+        if item.kind == "product_attribute":
+            if len(product_attributes) < max_product_attributes:
+                product_attributes.append(
+                    {
+                        "key": item.key,
+                        "value": item.value,
+                        "provider": item.provider,
+                        "tool": item.tool,
+                    }
+                )
+            continue
+        if item.kind == "category_candidate":
+            if len(category_candidates) < max_category_candidates:
+                category_candidates.append(
+                    {
+                        "key": item.key,
+                        "value": item.value,
+                        "provider": item.provider,
+                        "tool": item.tool,
                     }
                 )
             continue
@@ -120,7 +146,9 @@ def build_research_context(
                         "use_for": "market_language_and_seo_context",
                     }
                 )
-    has_evidence = bool(keywords or metrics or call_snippets)
+    has_evidence = bool(
+        keywords or metrics or product_attributes or category_candidates or call_snippets
+    )
     return {
         "authority": "third_party_public_market_evidence",
         "priority": 6,
@@ -129,6 +157,8 @@ def build_research_context(
         "has_retrieved_evidence": has_evidence,
         "keywords": keywords,
         "market_metrics": metrics,
+        "product_attributes": product_attributes,
+        "category_candidates": category_candidates,
         "cited_evidence": cited,
         "tool_summaries": call_snippets,
         "gaps": gaps,

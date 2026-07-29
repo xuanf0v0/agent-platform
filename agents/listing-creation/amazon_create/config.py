@@ -8,7 +8,7 @@ from typing import ClassVar, Final
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_DEFAULT_CHECKPOINT_PATH: Final[Path] = Path(".amazon_create/checkpoints.sqlite3")
+_DEFAULT_CHECKPOINT_PATH: Final[Path] = Path(".data/listing_creation.sqlite3")
 
 
 class Settings(BaseSettings):
@@ -50,9 +50,15 @@ class Settings(BaseSettings):
     )
 
     writing_tools_mcp_enabled: bool = Field(default=False, alias="WRITING_TOOLS_MCP_ENABLED")
-    writing_tools_mcp_command: str = Field(default="", alias="WRITING_TOOLS_MCP_COMMAND")
+    writing_tools_mcp_command: str = Field(
+        default="uvx --from git+https://github.com/wdm0006/writing-tools-mcp writing-tools-mcp",
+        alias="WRITING_TOOLS_MCP_COMMAND",
+    )
     writing_editor_mcp_enabled: bool = Field(default=False, alias="WRITING_EDITOR_MCP_ENABLED")
-    writing_editor_mcp_command: str = Field(default="", alias="WRITING_EDITOR_MCP_COMMAND")
+    writing_editor_mcp_command: str = Field(
+        default="npx --yes tsx .vendor/thatsboring/writing-editor-mcp/src/server.ts",
+        alias="WRITING_EDITOR_MCP_COMMAND",
+    )
     writing_editor_mcp_polish: bool = Field(default=False, alias="WRITING_EDITOR_MCP_POLISH")
     writing_mcp_timeout_seconds: float = Field(
         default=20.0, ge=0.5, le=60.0, alias="WRITING_MCP_TIMEOUT_SECONDS"
@@ -77,6 +83,6 @@ settings = Settings()
 
 def apply_runtime_settings(new: Settings) -> Settings:
     """Replace the module-level settings singleton."""
-    global settings  # noqa: PLW0603
+    global settings
     settings = new
     return settings

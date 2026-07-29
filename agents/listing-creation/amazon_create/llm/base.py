@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Protocol, runtime_checkable
 
 
@@ -20,4 +21,8 @@ class LLMClient(Protocol):
 
     def complete(self, system: str, user: str, **kwargs: object) -> str:
         """Return one synchronous model completion."""
+        ...
+
+    def stream(self, system: str, user: str, **kwargs: object) -> Iterator[str]:
+        """Yield one model completion without persisting partial output."""
         ...

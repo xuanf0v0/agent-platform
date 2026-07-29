@@ -52,7 +52,7 @@ def load_research_context(
             ),
         }
     try:
-        from amazon_create.mcp.live_research import (  # noqa: PLC0415
+        from amazon_create.mcp.live_research import (
             fetch_live_mcp_research_sync,
             research_bundle_from_snapshots,
         )
@@ -61,6 +61,7 @@ def load_research_context(
             settings,
             query=query,
             marketplace=marketplace,
+            timeout_s=settings.remote_mcp_timeout_seconds,
         )
         bundle = research_bundle_from_snapshots(snapshots)
         context = build_research_context(bundle, snapshots=snapshots)
@@ -71,6 +72,7 @@ def load_research_context(
                 query=asin,
                 marketplace=marketplace,
                 purpose="asin",
+                timeout_s=settings.remote_mcp_timeout_seconds,
             )
             asin_bundle = research_bundle_from_snapshots(asin_snapshots)
             asin_results.append(
@@ -88,6 +90,7 @@ def load_research_context(
             query=product_name,
             marketplace=marketplace,
             purpose="category",
+            timeout_s=settings.remote_mcp_timeout_seconds,
         )
         category_bundle = research_bundle_from_snapshots(category_snapshots)
         context["asin_research"] = asin_results
@@ -96,6 +99,8 @@ def load_research_context(
             snapshots=category_snapshots,
         )
         context["marketplace"] = marketplace
+        context["mode"] = "live"
+        context["allowed_keywords"] = list(context.get("keywords") or [])
         return context
     except Exception as exc:  # noqa: BLE001 — research is best-effort
         return {
@@ -108,12 +113,74 @@ def load_research_context(
         }
 
 
+def load_asin_research_context(
+    settings: Settings,
+    *,
+    asin: str,
+    marketplace: str,
+) -> dict[str, Any]:
+    """Fetch one real ASIN snapshot without running unrelated market providers."""
+    if settings.mock:
+        return {
+            "mode": "fixture",
+            "asin": asin,
+            "marketplace": marketplace,
+            "product_attributes": [],
+            "gaps": ["mock_mode_has_no_live_asin"],
+        }
+    if not settings.sellersprite_mcp_key.get_secret_value():
+        return {
+            "mode": "unavailable",
+            "asin": asin,
+            "marketplace": marketplace,
+            "product_attributes": [],
+            "gaps": ["sellersprite_mcp_credentials_missing"],
+        }
+    try:
+        from amazon_create.mcp.live_research import (
+            fetch_live_mcp_research_sync,
+            research_bundle_from_snapshots,
+        )
+
+        snapshots = fetch_live_mcp_research_sync(
+            settings,
+            query=asin,
+            marketplace=marketplace,
+            purpose="asin",
+            timeout_s=settings.remote_mcp_timeout_seconds,
+        )
+        context = build_research_context(
+            research_bundle_from_snapshots(snapshots),
+            snapshots=snapshots,
+        )
+        context.update(
+            {
+                "mode": "live" if context.get("product_attributes") else "degraded",
+                "asin": asin,
+                "marketplace": marketplace,
+                "allowed_keywords": list(context.get("keywords") or []),
+            }
+        )
+        return context
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "mode": "degraded",
+            "asin": asin,
+            "marketplace": marketplace,
+            "product_attributes": [],
+            "gaps": [f"asin_research_failed:{type(exc).__name__}"],
+        }
+
+
 def _has_remote_keys(settings: Settings) -> bool:
     return bool(
         settings.sellersprite_mcp_key.get_secret_value()
         or settings.sorftime_mcp_key.get_secret_value()
         or settings.sif_mcp_key.get_secret_value()
     )
+
+
+__all__ = ["build_query", "load_asin_research_context", "load_research_context"]
 
 
 def _fixture_context(
@@ -126,8 +193,8 @@ def _fixture_context(
     try:
         import asyncio
 
-        from amazon_create.mcp.fixture_server import build_fixture_provider  # noqa: PLC0415
-        from amazon_create.mcp.protocol import ResearchQuery  # noqa: PLC0415
+        from amazon_create.mcp.fixture_server import build_fixture_provider
+        from amazon_create.mcp.protocol import ResearchQuery
 
         provider = build_fixture_provider("fresh")
         roles = ("keyword", "shopper", "competitor")
@@ -140,7 +207,7 @@ def _fixture_context(
                         result = await session.call(
                             ResearchQuery(role=role, query=query, marketplace=marketplace)
                         )
-                    except Exception:  # noqa: BLE001
+                    except Exception:  # noqa: BLE001, S112 -- optional fixture role
                         continue
                     for claim in result.claims:
                         if claim.key in {"keyword", "phrase", "term"} or "keyword" in claim.key:

@@ -8,7 +8,7 @@ from mcp.shared.exceptions import McpError
 from mcp.types import Tool
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from amazon_create.mcp.live_research_data import normalize_tool_payload
+from amazon_create.mcp.live_research_data import compact_tool_payload, normalize_tool_payload
 from amazon_create.mcp.live_research_models import McpCallRecord, content_to_text, sanitize_text
 from amazon_create.mcp.live_research_types import ResearchGap, ToolNormalization
 from amazon_create.mcp.security import sanitize_mcp_payload
@@ -38,6 +38,8 @@ class _SchemaProperty(BaseModel):
 
     value_type: str | tuple[str, ...] | None = Field(default=None, alias="type")
     enum: tuple[str, ...] = ()
+    properties: dict[str, "_SchemaProperty"] = Field(default_factory=dict)
+    required: tuple[str, ...] = ()
 
 
 class _InputSchema(BaseModel):
@@ -160,12 +162,42 @@ def _tool_arguments(
         return builtin if builtin is not None else None
     if schema.value_type not in {None, "object"}:
         return None
+    request = schema.properties.get("request")
+    if request is not None and request.value_type in {None, "object"}:
+        nested = _arguments_for_properties(
+            request.properties,
+            request.required,
+            query,
+            marketplace,
+        )
+        if nested is None:
+            return None
+        return {"request": nested}
+    return _arguments_for_properties(
+        schema.properties,
+        schema.required,
+        query,
+        marketplace,
+    )
+
+
+def _arguments_for_properties(
+    properties: dict[str, _SchemaProperty],
+    required_fields: tuple[str, ...],
+    query: str,
+    marketplace: str,
+) -> dict[str, object] | None:
+    """Build flat arguments for one object layer of a reviewed read tool."""
+    schema = _InputSchema(
+        type="object",
+        properties=properties,
+        required=required_fields,
+    )
     query_field = _first_supported_field(_QUERY_FIELDS, schema, allow_array=True)
     market_field = _first_supported_field(_MARKET_FIELDS, schema)
     supported = {field for field in (query_field, market_field) if field is not None}
     if any(required not in supported for required in schema.required):
-        builtin = builtin_tool_arguments(provider, tool_name, query, marketplace)
-        return builtin if builtin is not None else None
+        return None
     arguments: dict[str, object] = {}
     if query_field is not None:
         prop = schema.properties[query_field]
@@ -180,7 +212,21 @@ def _tool_arguments(
         if market_property.enum and marketplace not in market_property.enum:
             return None
         arguments[market_field] = marketplace
+    if "page" in properties and _accepts_number(properties["page"]):
+        arguments["page"] = 1
+    if "size" in properties and _accepts_number(properties["size"]):
+        arguments["size"] = 20
     return arguments
+
+
+def _accepts_number(prop: _SchemaProperty) -> bool:
+    match prop.value_type:
+        case "integer" | "number":
+            return True
+        case tuple() as value_types:
+            return bool({"integer", "number"} & set(value_types))
+        case _:
+            return False
 
 
 async def call_tool_best_effort(
@@ -216,10 +262,16 @@ async def call_tool_best_effort(
         result = await session.call_tool(spec.tool_name, arguments=arguments)
         result_text = content_to_text(result)
         summary = sanitize_text(result_text, spec.secrets) or "(empty result)"
-        payload = sanitize_mcp_payload(
-            result.structuredContent if result.structuredContent is not None else result_text,
-            spec.secrets,
+        source: object = (
+            result.structuredContent if result.structuredContent is not None else result_text
         )
+        if isinstance(source, str):
+            try:
+                source = json.loads(source)
+            except json.JSONDecodeError:
+                pass
+        source = compact_tool_payload(spec.provider, spec.tool_name, source)
+        payload = sanitize_mcp_payload(source, spec.secrets)
         if payload.limit_code is not None:
             normalization = ToolNormalization(
                 gaps=(

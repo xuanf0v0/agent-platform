@@ -1,5 +1,7 @@
-"""Schema-gated third-party keyword and market research data."""
+"""Allowlisted normalization for third-party Amazon research data."""
 
+import json
+import re
 from decimal import Decimal
 from typing import Annotated, ClassVar, Final, TypeAlias
 
@@ -24,12 +26,28 @@ _TOOLS: Final = frozenset(
         "keyword_research",
         "potential_product",
         "product_research",
+        "asin_detail",
+        "product_node",
         "related_keyword",
         # SIF market-domain keyword tools (called without tools/list).
         "market_get_keyword_demand",
         "market_get_keyword_competition",
         "market_screen_keyword_opportunities",
         "market_get_keyword_root_trend",
+    }
+)
+_SCHEMALESS_TOOLS: Final = frozenset(
+    {
+        ("sellersprite", "asin_detail"),
+        ("sellersprite", "product_node"),
+        ("sellersprite", "keyword_miner"),
+        ("sellersprite", "keyword_research"),
+        ("sellersprite", "product_research"),
+        ("sellersprite", "google_trend"),
+        ("sif", "market_get_keyword_demand"),
+        ("sif", "market_get_keyword_competition"),
+        ("sif", "market_screen_keyword_opportunities"),
+        ("sif", "market_get_keyword_root_trend"),
     }
 )
 _KEYWORD_FIELDS: Final = frozenset(
@@ -48,7 +66,79 @@ _METRIC_FIELDS: Final = frozenset(
     }
 )
 _ALLOWED_SCHEMA_FIELDS: Final = _KEYWORD_FIELDS | _METRIC_FIELDS
-_MarketMetric: TypeAlias = Annotated[  # noqa: UP040 -- Python 3.11 compatibility
+_SELLER_METRIC_FIELDS: Final[dict[str, str]] = {
+    "searches": "search_volume",
+    "search_volume": "search_volume",
+    "monthly_search_volume": "monthly_search_volume",
+    "purchases": "purchases",
+    "purchase_rate": "purchase_rate",
+    "purchaserate": "purchase_rate",
+    "monopoly_click_rate": "top_click_concentration",
+    "monopolyclickrate": "top_click_concentration",
+    "products": "product_count",
+    "product_count": "product_count",
+    "supply_demand_ratio": "supply_demand_ratio",
+    "supplydemandratio": "supply_demand_ratio",
+    "avg_price": "average_price",
+    "avgprice": "average_price",
+    "bid": "bid",
+    "cpc": "cpc",
+    "competition": "competition",
+    "demand": "demand",
+    "volume": "volume",
+}
+_ASIN_FIELDS: Final[tuple[str, ...]] = (
+    "asin",
+    "title",
+    "brand",
+    "marketplace",
+    "parent",
+    "price",
+    "rating",
+    "ratings",
+    "dimensions",
+    "weight",
+    "nodeId",
+    "nodeIdPath",
+    "nodeLabelPath",
+    "variations",
+    "features",
+    "overviews",
+    "subcategories",
+    "variationList",
+)
+_KEYWORD_RESPONSE_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "keyword",
+        "keywords",
+        "term",
+        "query",
+        "keyword_root",
+        "month",
+        "searches",
+        "search_volume",
+        "monthly_search_volume",
+        "purchases",
+        "purchaseRate",
+        "purchase_rate",
+        "monopolyClickRate",
+        "monopoly_click_rate",
+        "products",
+        "product_count",
+        "supplyDemandRatio",
+        "supply_demand_ratio",
+        "avgPrice",
+        "avg_price",
+        "bid",
+        "cpc",
+        "competition",
+        "demand",
+        "volume",
+        "relevancy",
+        "searchRank",
+    }
+)
+_MarketMetric: TypeAlias = Annotated[
     Decimal,
     Field(ge=0, le=1_000_000_000_000),
 ]
@@ -90,7 +180,7 @@ class _ResearchRecord(BaseModel):
     current: "_ResearchRecord | None" = None
 
 
-_Payload: TypeAlias = _ResearchRecord | tuple[_ResearchRecord, ...]  # noqa: UP040 -- Python 3.11 compatibility
+_Payload: TypeAlias = _ResearchRecord | tuple[_ResearchRecord, ...]
 _PAYLOAD_ADAPTER: Final[TypeAdapter[_Payload]] = TypeAdapter(
     _ResearchRecord | tuple[_ResearchRecord, ...]
 )
@@ -129,6 +219,217 @@ def _decimal_text(value: Decimal) -> str:
     if "." in rendered:
         rendered = rendered.rstrip("0").rstrip(".")
     return rendered
+
+
+def _snake_case(value: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", value).casefold()
+
+
+def _item_value(value: object, *, limit: int = 4000) -> str:
+    if isinstance(value, str):
+        rendered = value.strip()
+    elif isinstance(value, bool) or value is None:
+        return ""
+    elif isinstance(value, (int, float, Decimal)):
+        rendered = str(value)
+    elif isinstance(value, (dict, list, tuple)):
+        rendered = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    else:
+        return ""
+    return rendered[:limit]
+
+
+def _walk_dicts(value: object, *, limit: int = 256) -> tuple[dict[str, object], ...]:
+    rows: list[dict[str, object]] = []
+    stack = [value]
+    while stack and len(rows) < limit:
+        current = stack.pop()
+        if isinstance(current, dict):
+            rows.append(current)
+            stack.extend(reversed(list(current.values())))
+        elif isinstance(current, list):
+            stack.extend(reversed(current))
+    return tuple(rows)
+
+
+def compact_tool_payload(provider: str, tool: str, value: object) -> object:
+    """Trim reviewed provider payloads before enforcing the shared byte boundary."""
+    if provider != "sellersprite" or not isinstance(value, dict):
+        return value
+    data = value.get("data")
+    envelope = {key: value[key] for key in ("code", "message") if key in value}
+    if tool == "asin_detail" and isinstance(data, dict):
+        envelope["data"] = {key: data[key] for key in _ASIN_FIELDS if key in data}
+        return envelope
+    if tool == "product_node" and isinstance(data, list):
+        envelope["data"] = [
+            {
+                key: row[key]
+                for key in ("nodeIdPath", "nodeLabelPath", "nodeLabelPathLocale", "products")
+                if key in row
+            }
+            for row in data[:24]
+            if isinstance(row, dict)
+        ]
+        return envelope
+    if tool in {"keyword_miner", "keyword_research"} and isinstance(data, dict):
+        items = data.get("items")
+        if isinstance(items, list):
+            envelope["data"] = {
+                "items": [
+                    {key: item[key] for key in _KEYWORD_RESPONSE_FIELDS if key in item}
+                    for item in items[:8]
+                    if isinstance(item, dict)
+                ]
+            }
+            return envelope
+    return value
+
+
+def _metric_item(
+    *,
+    key: str,
+    value: object,
+    provider: str,
+    tool: str,
+) -> ResearchItem | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal, str)):
+        return None
+    try:
+        decimal = Decimal(str(value))
+    except Exception:  # noqa: BLE001
+        return None
+    if not decimal.is_finite() or decimal < 0 or decimal > Decimal(1000000000000):
+        return None
+    return ResearchItem(
+        kind="market_metric",
+        key=key,
+        value=_decimal_text(decimal),
+        provider=provider,
+        tool=tool,
+    )
+
+
+def _keyword_market_items(
+    payload: object,
+    *,
+    provider: str,
+    tool: str,
+) -> tuple[ResearchItem, ...]:
+    accepted: list[ResearchItem] = []
+    for record in _walk_dicts(payload):
+        raw_keyword = next(
+            (
+                record.get(name)
+                for name in ("keyword", "keywords", "term", "query", "keyword_root")
+                if isinstance(record.get(name), str)
+            ),
+            None,
+        )
+        keyword = parse_marketplace_keyword(raw_keyword)
+        if keyword:
+            accepted.append(
+                ResearchItem(
+                    kind="keyword",
+                    key="keyword",
+                    value=keyword,
+                    provider=provider,
+                    tool=tool,
+                )
+            )
+        for raw_key, value in record.items():
+            canonical = _SELLER_METRIC_FIELDS.get(_snake_case(raw_key))
+            if canonical is None:
+                canonical = _SELLER_METRIC_FIELDS.get(raw_key.casefold())
+            if canonical is None:
+                continue
+            metric_key = f"{keyword}:{canonical}" if keyword else canonical
+            metric = _metric_item(
+                key=metric_key,
+                value=value,
+                provider=provider,
+                tool=tool,
+            )
+            if metric is not None:
+                accepted.append(metric)
+        if len(accepted) >= 40:
+            break
+    return tuple(accepted[:40])
+
+
+def _asin_detail_items(
+    payload: object,
+    *,
+    provider: str,
+    tool: str,
+) -> tuple[ResearchItem, ...]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+        return ()
+    if str(payload.get("code") or "").upper() not in {"", "OK"}:
+        return ()
+    data = payload["data"]
+    asin = _item_value(data.get("asin"))
+    if len(asin) != 10:
+        return ()
+    items: list[ResearchItem] = []
+    for field in _ASIN_FIELDS:
+        value = _item_value(data.get(field))
+        if not value:
+            continue
+        items.append(
+            ResearchItem(
+                kind="product_attribute",
+                key=_snake_case(field),
+                value=value,
+                provider=provider,
+                tool=tool,
+            )
+        )
+    return tuple(items)
+
+
+def _category_items(
+    payload: object,
+    *,
+    provider: str,
+    tool: str,
+) -> tuple[ResearchItem, ...]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        return ()
+    accepted: list[ResearchItem] = []
+    for row in payload["data"][:24]:
+        if not isinstance(row, dict):
+            continue
+        compact = {
+            key: row[key]
+            for key in ("nodeIdPath", "nodeLabelPath", "nodeLabelPathLocale", "products")
+            if row.get(key) not in {None, ""}
+        }
+        value = _item_value(compact, limit=1200)
+        if value:
+            accepted.append(
+                ResearchItem(
+                    kind="category_candidate",
+                    key="browse_node_candidate",
+                    value=value,
+                    provider=provider,
+                    tool=tool,
+                )
+            )
+    return tuple(accepted)
+
+
+def _schemaless_items(
+    payload: object,
+    *,
+    provider: str,
+    tool: str,
+) -> tuple[ResearchItem, ...]:
+    if tool == "asin_detail":
+        return _asin_detail_items(payload, provider=provider, tool=tool)
+    if tool == "product_node":
+        return _category_items(payload, provider=provider, tool=tool)
+    return _keyword_market_items(payload, provider=provider, tool=tool)
 
 
 def _flatten(payload: _Payload) -> tuple[_ResearchRecord, ...]:
@@ -217,13 +518,22 @@ def normalize_tool_payload(
     elif tool_name not in _TOOLS:
         gap_code = "tool_not_allowlisted"
     # Empty output schema is allowed only for SIF direct-call tools (no tools/list).
-    elif (
-        not output_schema_json.strip()
-        and provider_name != "sif"
-        and (schema_gap := _schema_gap(output_schema_json))
-    ):
-        gap_code = schema_gap
-    elif output_schema_json.strip() and (schema_gap := _schema_gap(output_schema_json)):
+    elif not output_schema_json.strip() and (provider_name, tool_name) in _SCHEMALESS_TOOLS:
+        payload = sanitize_mcp_json(payload_json)
+        if payload is None:
+            gap_code = "payload_malformed"
+        elif payload.limit_code is not None:
+            gap_code = payload.limit_code
+        else:
+            items = _schemaless_items(
+                payload.value,
+                provider=provider_name,
+                tool=tool_name,
+            )
+            return ToolNormalization(items=items) if items else _gap(
+                "payload_rejected", provider_name, tool_name
+            )
+    elif schema_gap := _schema_gap(output_schema_json):
         gap_code = schema_gap
     else:
         payload = sanitize_mcp_json(payload_json)
@@ -272,5 +582,6 @@ __all__ = [
     "ResearchItem",
     "ToolNormalization",
     "build_research_bundle",
+    "compact_tool_payload",
     "normalize_tool_payload",
 ]

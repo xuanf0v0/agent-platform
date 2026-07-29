@@ -68,6 +68,11 @@ select:focus-visible {
 }
 
 .app-shell {
+  --pointer-x: 50vw;
+  --pointer-y: 35vh;
+  --pointer-active: 0;
+  --network-shift-x: 0px;
+  --network-shift-y: 0px;
   isolation: isolate;
   min-height: 100vh;
   overflow: hidden;
@@ -88,6 +93,22 @@ select:focus-visible {
   pointer-events: none;
   position: fixed;
   z-index: 0;
+}
+
+.app-shell::after {
+  background:
+    radial-gradient(
+      340px circle at var(--pointer-x) var(--pointer-y),
+      rgba(34, 211, 238, calc(0.1 * var(--pointer-active))),
+      rgba(14, 116, 144, calc(0.045 * var(--pointer-active))) 30%,
+      transparent 70%
+    );
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  transition: opacity 180ms ease;
+  z-index: 1;
 }
 
 .ambient {
@@ -117,16 +138,19 @@ select:focus-visible {
 
 .network {
   inset: 0;
-  opacity: 0.18;
+  opacity: 0.4;
   pointer-events: none;
   position: fixed;
+  transform: translate3d(var(--network-shift-x), var(--network-shift-y), 0);
+  transition: transform 180ms ease-out;
   width: 100%;
   z-index: 1;
 }
 
 .particle-field {
   inset: 0;
-  opacity: 0.9;
+  mix-blend-mode: screen;
+  opacity: 1;
   pointer-events: none;
   position: fixed;
   z-index: 1;
@@ -135,12 +159,25 @@ select:focus-visible {
 .network-lines {
   fill: none;
   stroke: #22d3ee;
-  stroke-width: 0.7;
+  stroke-width: 1.05;
+}
+
+.network-lines path {
+  animation: network-flow 16s linear infinite;
+  stroke-dasharray: 4 12;
+}
+
+.network-lines path:nth-child(2) {
+  animation-delay: -5s;
+}
+
+.network-lines path:nth-child(3) {
+  animation-delay: -10s;
 }
 
 .network-nodes {
   fill: #a5f3fc;
-  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.9));
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 1));
 }
 
 .network-nodes circle:nth-child(3n) {
@@ -159,7 +196,9 @@ select:focus-visible {
 .card {
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
-  background: linear-gradient(145deg, rgba(12, 26, 46, 0.8), rgba(5, 13, 27, 0.62));
+  background:
+    linear-gradient(145deg, rgba(16, 35, 60, 0.7), rgba(5, 13, 27, 0.48)),
+    radial-gradient(360px circle at var(--pointer-x) var(--pointer-y), rgba(34, 211, 238, 0.055), transparent 62%);
   border: 1px solid var(--lithos-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 24px 70px rgba(0, 0, 0, 0.2);
 }
@@ -344,6 +383,15 @@ select:focus-visible {
 .agent-card {
   overflow: hidden;
   position: relative;
+}
+
+.glass-panel,
+.agent-card {
+  animation: glass-breathe 9s ease-in-out infinite;
+}
+
+.agent-card:nth-child(2n) {
+  animation-delay: -4.5s;
 }
 
 .agent-card:hover {
@@ -642,6 +690,15 @@ select:focus-visible {
 @keyframes node-pulse {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
+}
+
+@keyframes network-flow {
+  to { stroke-dashoffset: -180; }
+}
+
+@keyframes glass-breathe {
+  0%, 100% { border-color: rgba(125, 211, 252, 0.13); }
+  50% { border-color: rgba(103, 232, 249, 0.22); }
 }
 
 @keyframes spin {

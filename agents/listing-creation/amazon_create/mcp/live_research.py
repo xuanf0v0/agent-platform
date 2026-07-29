@@ -247,13 +247,15 @@ async def fetch_live_mcp_research(
     Returns an empty list when no keys are configured. Per-provider errors become
     ``status="error"`` snapshots; never raises for remote failures.
     """
-    from amazon_create.mcp.sif_research import research_sif_endpoint  # noqa: PLC0415
+    from amazon_create.mcp.sif_research import research_sif_endpoint
 
     endpoints = endpoints_from_settings(settings)
     if not endpoints:
         return []
     snapshots: list[McpToolSnapshot] = []
     for endpoint in endpoints:
+        if not preferred_tool_names(endpoint.name, purpose):
+            continue
         if endpoint.name == "sif":
             # SIF uses plain JSON-RPC (tools/list is too large for streamable HTTP).
             snapshots.append(
