@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Final
 
 # ---------------------------------------------------------------------------
 # Agent metadata
 # ---------------------------------------------------------------------------
+
+_ROOT: Final = Path(__file__).resolve().parents[1]
 
 _AGENT_REGISTRY: Final[dict[str, dict]] = {
     "listing-creation": {
@@ -15,11 +18,12 @@ _AGENT_REGISTRY: Final[dict[str, dict]] = {
         "name_zh": "Listing 创作 Agent",
         "description": "从 0 到 1 创建 Amazon Listing（Title + Bullets + Search Terms）",
         "description_en": "Create Amazon listings from scratch — Title, Bullets, Search Terms",
-        "path": "/Users/ypc/listing-creation-agent",
-        "entry": "amazon_create/ui/app.py",
+        "path": str(_ROOT / "agents" / "listing-creation"),
         "default_port": 8501,
         "icon": "✨",
-        "venv": ".venv/bin/streamlit",
+        "api_command": ["uv", "run", "amz-create-api", "--port", "8501"],
+        "web_dir": "web",
+        "web_dist": "amazon_create/web_dist/index.html",
     },
     "listing-optimization": {
         "id": "listing-optimization",
@@ -27,11 +31,12 @@ _AGENT_REGISTRY: Final[dict[str, dict]] = {
         "name_zh": "Listing 优化 Agent",
         "description": "优化现有 Amazon Listing，自动研究 + 重写 + 后检",
         "description_en": "Optimize existing Amazon listings with research, rewrite, and postflight",
-        "path": "/Users/ypc/listing-optimization-agent",
-        "entry": "amazon_copy/ui/app.py",
+        "path": str(_ROOT / "agents" / "listing-optimization"),
         "default_port": 8502,
         "icon": "🔧",
-        "venv": ".venv/bin/streamlit",
+        "api_command": ["uv", "run", "amz-copy-api", "--port", "8502"],
+        "web_dir": "web",
+        "web_dist": "amazon_copy/web_dist/index.html",
     },
 }
 

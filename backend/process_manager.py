@@ -1,4 +1,4 @@
-"""Process manager — start/stop Streamlit subprocesses per agent."""
+"""Process manager for packaged React and Python API agents."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class ProcessInfo:
 
 
 class ProcessManager:
-    """Manages Streamlit subprocess lifecycle for all registered agents."""
+    """Manage build and API subprocess lifecycle for registered agents."""
 
     def __init__(self) -> None:
         self._processes: dict[str, ProcessInfo] = {}
@@ -81,7 +81,7 @@ class ProcessManager:
         return result
 
     async def start(self, agent_id: str) -> ProcessInfo:
-        """Start a Streamlit subprocess for the given agent."""
+        """Build the React app when needed and start its Python API."""
         agent = get_agent(agent_id)
         if agent is None:
             raise ValueError(f"Unknown agent: {agent_id}")
@@ -95,18 +95,12 @@ class ProcessManager:
 
         try:
             cwd = Path(agent["path"])
-            venv_streamlit = cwd / agent["venv"]
-            entry = agent["entry"]
             port = agent["default_port"]
 
+            await self._ensure_frontend(agent, cwd)
+
             info.process = await asyncio.create_subprocess_exec(
-                str(venv_streamlit),
-                "run",
-                entry,
-                "--server.port",
-                str(port),
-                "--server.headless",
-                "true",
+                *agent["api_command"],
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(cwd),
@@ -125,6 +119,23 @@ class ProcessManager:
             info.error_message = str(exc)
 
         return info
+
+    async def _ensure_frontend(self, agent: dict[str, Any], cwd: Path) -> None:
+        """Install and build one agent frontend if no packaged index exists."""
+        if (cwd / agent["web_dist"]).is_file():
+            return
+        web_dir = cwd / agent["web_dir"]
+        for command in (("npm", "install"), ("npm", "run", "build")):
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=str(web_dir),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            output, _ = await process.communicate()
+            if process.returncode != 0:
+                message = output.decode("utf-8", errors="replace")[-2000:]
+                raise RuntimeError(f"frontend build failed: {message}")
 
     async def stop(self, agent_id: str) -> ProcessInfo:
         """Stop a running agent subprocess."""

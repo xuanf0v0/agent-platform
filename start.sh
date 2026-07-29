@@ -9,7 +9,7 @@ echo "  🤖 Agent Manager"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ── Kill old processes on both ports ──────────────────────
-for PORT in 8000 5173; do
+for PORT in 8000 5173 8501 8502; do
     OLD_PID=$(lsof -ti:$PORT 2>/dev/null)
     if [ -n "$OLD_PID" ]; then
         echo "🔪 端口 $PORT 被占用 (PID: $OLD_PID)，自动释放..."

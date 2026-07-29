@@ -1,4 +1,4 @@
-"""Agent Manager — unified management interface for Streamlit agents."""
+"""Agent Manager — unified management interface for packaged React agents."""
 
 from __future__ import annotations
 
