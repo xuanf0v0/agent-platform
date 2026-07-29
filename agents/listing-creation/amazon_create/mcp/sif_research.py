@@ -142,6 +142,8 @@ def research_sif_endpoint(
     endpoint: RemoteMcpEndpoint,
     *,
     query: str,
+    marketplace: str = "US",
+    purpose: str = "market",
     timeout_s: float = _SIF_TIMEOUT_S,
 ) -> McpToolSnapshot:
     """Call allowlisted SIF market tools over plain JSON-RPC HTTP."""
@@ -151,7 +153,7 @@ def research_sif_endpoint(
         "Accept": "application/json, text/event-stream",
         **dict(endpoint.headers),
     }
-    targets = list(preferred_tool_names("sif"))[:2]
+    targets = list(preferred_tool_names("sif", purpose))[:2]
     calls: list[McpCallRecord] = []
     research_items: list[ResearchItem] = []
     research_gaps: list[ResearchGap] = []
@@ -185,7 +187,7 @@ def research_sif_endpoint(
                     research_gaps=(ResearchGap(code="provider_error", provider="sif"),),
                 )
             for index, tool_name in enumerate(targets, start=2):
-                arguments = builtin_tool_arguments("sif", tool_name, query)
+                arguments = builtin_tool_arguments("sif", tool_name, query, marketplace)
                 if arguments is None:
                     calls.append(
                         McpCallRecord(

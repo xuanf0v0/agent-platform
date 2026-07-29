@@ -9,7 +9,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from amazon_create.schemas.brief import ProductBrief
-from amazon_create.schemas.deliverable import CreationDeliverable
+from amazon_create.schemas.deliverable import CreationDeliverable, ImageDesignPlan
 from amazon_create.schemas.evidence import EVIDENCE_POLICY, ClaimAuthorizationResult
 
 
@@ -24,6 +24,8 @@ class CreationStage(StrEnum):
     KEYWORDS = "keywords"
     FINAL_COPY = "final_copy"
     IMAGE_HANDOFF = "image_handoff"
+    IMAGE_ANALYSIS = "image_analysis"
+    IMAGE_PLAN = "image_plan"
     COMPLETED = "completed"
 
 
@@ -36,6 +38,8 @@ STAGE_ORDER: tuple[CreationStage, ...] = (
     CreationStage.KEYWORDS,
     CreationStage.FINAL_COPY,
     CreationStage.IMAGE_HANDOFF,
+    CreationStage.IMAGE_ANALYSIS,
+    CreationStage.IMAGE_PLAN,
     CreationStage.COMPLETED,
 )
 
@@ -48,6 +52,8 @@ STAGE_LABEL_ZH: dict[CreationStage, str] = {
     CreationStage.KEYWORDS: "关键词与意图库审批",
     CreationStage.FINAL_COPY: "最终文案审批",
     CreationStage.IMAGE_HANDOFF: "图片设计交接",
+    CreationStage.IMAGE_ANALYSIS: "图片组分析审批",
+    CreationStage.IMAGE_PLAN: "主图与七张辅图审批",
     CreationStage.COMPLETED: "已完成",
 }
 
@@ -87,6 +93,11 @@ class CreationSession(BaseModel):
     last_message_zh: str = ""
     error: str = ""
     image_design_requested: bool | None = None
+    image_task_type: str = "image_design"
+    image_asset_count: int = 0
+    image_design_plan: ImageDesignPlan | None = None
+    human_review_confirmed: bool = False
+    active_rule_files: tuple[str, ...] = ()
 
     def artifact(self, stage: CreationStage) -> StageArtifact | None:
         return self.artifacts.get(stage.value)

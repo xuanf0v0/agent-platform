@@ -13,10 +13,12 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from amazon_create.config import Settings
+from amazon_create.image_assets import register_images
 from amazon_create.pipeline.creation_pipeline import apply_user_message, new_session
 from amazon_create.schemas.workflow import CreationSession
 
 _WEB_ROOT = Path(__file__).with_name("web_dist")
+_MAX_REQUEST_BYTES = 34 * 1024 * 1024
 
 
 class CreationTurnRequest(BaseModel):
@@ -26,6 +28,15 @@ class CreationTurnRequest(BaseModel):
 
     message: str = Field(min_length=1)
     session: CreationSession | None = None
+
+
+class ImageUploadRequest(BaseModel):
+    """Bounded browser image upload for one existing session."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
+    session_id: str = Field(min_length=1)
+    images: list[dict[str, str]] = Field(min_length=1, max_length=8)
 
 
 def creation_payload(payload: dict[str, Any]) -> CreationSession:
@@ -47,15 +58,41 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._static_response()
 
     def do_POST(self) -> None:
-        if self.path != "/api/session/turn":
+        if self.path not in {"/api/session/turn", "/api/session/images"}:
             self._json_response(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length < 1 or length > _MAX_REQUEST_BYTES:
+                self._json_response(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    {"error": "request_too_large", "message": "请求正文必须小于 34 MB"},
+                )
+                return
             payload = json.loads(self.rfile.read(length))
             if not isinstance(payload, dict):
                 message = "request body must be a JSON object"
                 raise TypeError(message)
+            if self.path == "/api/session/images":
+                request = ImageUploadRequest.model_validate(payload)
+                images = register_images(request.session_id, request.images)
+                self._json_response(
+                    HTTPStatus.OK,
+                    {
+                        "session_id": request.session_id,
+                        "count": len(images),
+                        "images": [
+                            {
+                                "asset_id": image.asset_id,
+                                "name": image.name,
+                                "mime_type": image.mime_type,
+                                "size_bytes": image.size_bytes,
+                            }
+                            for image in images
+                        ],
+                    },
+                )
+                return
             result = creation_payload(payload)
         except (ValidationError, TypeError, ValueError, json.JSONDecodeError) as exc:
             self._json_response(

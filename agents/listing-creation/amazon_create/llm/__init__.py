@@ -23,7 +23,12 @@ def get_llm(settings: Settings | None = None, *, role: str = "writer") -> LLMCli
     if not key:
         message = "OPENAI_API_KEY is required when MOCK=false"
         raise ConfigError(message)
-    model = runtime.writer_model if role == "writer" else runtime.review_model
+    if role == "writer":
+        model = runtime.writer_model
+    elif role == "vision":
+        model = runtime.vision_model or runtime.writer_model
+    else:
+        model = runtime.review_model
     return OpenAILLM(model=model, api_key=key, base_url=runtime.openai_api_base)
 
 

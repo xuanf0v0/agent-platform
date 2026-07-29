@@ -58,6 +58,7 @@ class ToolCallSpec:
     input_schema_json: str
     output_schema_json: str
     secrets: tuple[str, ...]
+    marketplace: str = _DEFAULT_MARKETPLACE
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +120,7 @@ def builtin_tool_arguments(
     provider: str,
     tool_name: str,
     query: str,
+    marketplace: str = _DEFAULT_MARKETPLACE,
 ) -> dict[str, object] | None:
     """Arguments for known providers when tools/list schemas are unavailable."""
     if provider != "sif" or tool_name not in _SIF_TOOL_ARGUMENTS:
@@ -135,7 +137,7 @@ def builtin_tool_arguments(
             words = [part for part in query.split() if part]
             arguments[field] = " ".join(words[:3]) if words else query
         elif field == "country":
-            arguments[field] = _DEFAULT_MARKETPLACE
+            arguments[field] = marketplace
     return arguments
 
 
@@ -145,15 +147,16 @@ def _tool_arguments(
     *,
     provider: str = "",
     tool_name: str = "",
+    marketplace: str = _DEFAULT_MARKETPLACE,
 ) -> dict[str, object] | None:
     if not input_schema_json.strip():
         # SIF skips tools/list and needs built-in args; other providers keep {}.
-        builtin = builtin_tool_arguments(provider, tool_name, query)
+        builtin = builtin_tool_arguments(provider, tool_name, query, marketplace)
         return builtin if builtin is not None else {}
     try:
         schema = _InputSchema.model_validate_json(input_schema_json)
     except ValidationError:
-        builtin = builtin_tool_arguments(provider, tool_name, query)
+        builtin = builtin_tool_arguments(provider, tool_name, query, marketplace)
         return builtin if builtin is not None else None
     if schema.value_type not in {None, "object"}:
         return None
@@ -161,7 +164,7 @@ def _tool_arguments(
     market_field = _first_supported_field(_MARKET_FIELDS, schema)
     supported = {field for field in (query_field, market_field) if field is not None}
     if any(required not in supported for required in schema.required):
-        builtin = builtin_tool_arguments(provider, tool_name, query)
+        builtin = builtin_tool_arguments(provider, tool_name, query, marketplace)
         return builtin if builtin is not None else None
     arguments: dict[str, object] = {}
     if query_field is not None:
@@ -174,9 +177,9 @@ def _tool_arguments(
             arguments[query_field] = query
     if market_field is not None:
         market_property = schema.properties[market_field]
-        if market_property.enum and _DEFAULT_MARKETPLACE not in market_property.enum:
+        if market_property.enum and marketplace not in market_property.enum:
             return None
-        arguments[market_field] = _DEFAULT_MARKETPLACE
+        arguments[market_field] = marketplace
     return arguments
 
 
@@ -190,6 +193,7 @@ async def call_tool_best_effort(
         spec.query,
         provider=spec.provider,
         tool_name=spec.tool_name,
+        marketplace=spec.marketplace,
     )
     if arguments is None:
         return ToolCallOutcome(

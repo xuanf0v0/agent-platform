@@ -23,6 +23,11 @@ class ProductBrief(BaseModel):
     brand: str = ""
     product_type: str = ""
     media_category: bool = False
+    media_status_confirmed: bool = False
+    listing_scope: str = "parent"
+    listing_scope_confirmed: bool = False
+    variation_values: dict[str, str] = Field(default_factory=dict)
+    product_asin: str = ""
     specs_text: str = ""
     competitors: tuple[str, ...] = ()
     keywords_seed: tuple[str, ...] = ()
@@ -36,6 +41,23 @@ class ProductBrief(BaseModel):
     def is_ready(self) -> bool:
         """True when product name and marketplace are present."""
         return bool(self.product_name.strip() and self.marketplace.strip())
+
+    def required_context_missing(self) -> tuple[str, ...]:
+        """Fields that materially change policy, localization, or variation handling."""
+        missing: list[str] = []
+        if not self.product_name.strip():
+            missing.append("产品名")
+        if not self.marketplace.strip():
+            missing.append("目标站点")
+        if not self.language.strip():
+            missing.append("目标语言")
+        if not self.product_type.strip():
+            missing.append("产品类型/类目")
+        if not self.media_status_confirmed:
+            missing.append("是否 media 类目")
+        if not self.listing_scope_confirmed:
+            missing.append("父体/子体范围")
+        return tuple(missing)
 
     def with_fact(self, row: FactRow) -> ProductBrief:
         """Return brief with merged ledger row (higher tier wins)."""

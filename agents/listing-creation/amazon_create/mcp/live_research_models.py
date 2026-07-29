@@ -23,6 +23,11 @@ _SELLERSPRITE_PREFERRED: Final[tuple[str, ...]] = (
     "product_research",
     "google_trend",
 )
+_SELLERSPRITE_ASIN_PREFERRED: Final[tuple[str, ...]] = (
+    "asin_detail",
+    "product_research",
+)
+_SELLERSPRITE_CATEGORY_PREFERRED: Final[tuple[str, ...]] = ("product_node",)
 _SORFTIME_PREFERRED: Final[tuple[str, ...]] = (
     "potential_product",
     "keyword_research",
@@ -144,13 +149,21 @@ def sanitize_text(text: str, secrets: Sequence[str]) -> str:
     return truncate_summary(sanitize_mcp_text(text, tuple(secrets)))
 
 
-def preferred_tool_names(provider: str) -> tuple[str, ...]:
+def preferred_tool_names(provider: str, purpose: str = "market") -> tuple[str, ...]:
     """Preferred read-oriented tool names per provider."""
     if provider == "sellersprite":
+        if purpose == "asin":
+            return _SELLERSPRITE_ASIN_PREFERRED
+        if purpose == "category":
+            return _SELLERSPRITE_CATEGORY_PREFERRED
         return _SELLERSPRITE_PREFERRED
     if provider == "sorftime":
+        if purpose != "market":
+            return ()
         return _SORFTIME_PREFERRED
     if provider == "sif":
+        if purpose != "market":
+            return ()
         return _SIF_PREFERRED
     return ()
 
@@ -162,10 +175,14 @@ def known_tool_names(provider: str) -> frozenset[str]:
     return frozenset()
 
 
-def pick_research_tools(provider: str, tool_names: Sequence[str]) -> list[str]:
+def pick_research_tools(
+    provider: str,
+    tool_names: Sequence[str],
+    purpose: str = "market",
+) -> list[str]:
     """Pick only exact reviewed read-only tool names for the named provider."""
     advertised = frozenset(tool_names)
-    preferred = preferred_tool_names(provider)
+    preferred = preferred_tool_names(provider, purpose)
     if not preferred:
         return []
     # When the provider catalog was skipped (budget), use the built-in allowlist.

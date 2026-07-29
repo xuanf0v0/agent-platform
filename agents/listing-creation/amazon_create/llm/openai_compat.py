@@ -37,9 +37,24 @@ class OpenAILLM:
         """Create one chat completion, requesting JSON output by default."""
         self._call_count += 1
         json_mode = kwargs.pop("json_mode", True)
+        images = kwargs.pop("images", ())
+        user_content: str | list[dict[str, Any]] = user
+        if isinstance(images, (list, tuple)) and images:
+            user_content = [{"type": "text", "text": user}]
+            for image in images[:8]:
+                if isinstance(image, str) and image.startswith("data:image/"):
+                    user_content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image, "detail": "auto"},
+                        }
+                    )
         request: dict[str, Any] = {
             "model": self._model,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_content},
+            ],
             "temperature": kwargs.pop("temperature", 0.4),
             **kwargs,
         }

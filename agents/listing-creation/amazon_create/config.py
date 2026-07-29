@@ -28,8 +28,9 @@ class Settings(BaseSettings):
     openai_api_base: str = Field(default="https://api.deepseek.com", alias="OPENAI_API_BASE")
     writer_model: str = Field(default="deepseek-v4-flash", alias="WRITER_MODEL")
     review_model: str = Field(default="deepseek-v4-flash", alias="REVIEW_MODEL")
+    vision_model: str = Field(default="", alias="VISION_MODEL")
 
-    mock: bool = Field(default=True, alias="MOCK")
+    mock: bool = Field(default=False, alias="MOCK")
     locale: str = Field(default="en", alias="LOCALE")
 
     sellersprite_mcp_key: SecretStr = Field(

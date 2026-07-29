@@ -24,20 +24,79 @@ def load_research_context(
     product_name: str,
     marketplace: str,
     specs: str = "",
+    product_asin: str = "",
+    competitor_asins: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Return a JSON-safe research brief; never raises on provider failure."""
     query = build_query(product_name=product_name, marketplace=marketplace, specs=specs)
-    if settings.mock or not _has_remote_keys(settings):
-        return _fixture_context(query)
+    targets = tuple(dict.fromkeys(asin for asin in (product_asin, *competitor_asins) if asin))
+    if settings.mock:
+        return _fixture_context(query, marketplace=marketplace, asin_targets=targets)
+    if not _has_remote_keys(settings):
+        return {
+            "mode": "unavailable",
+            "marketplace": marketplace,
+            "query": query,
+            "allowed_keywords": [],
+            "market_metrics": [],
+            "cited_evidence": [],
+            "asin_research": [],
+            "category_research": {
+                "mode": "unavailable",
+                "guidance": "Configure a live MCP provider before recommending a browse node.",
+            },
+            "gaps": ["live_market_research_credentials_missing"],
+            "guidance": (
+                "No live market provider is configured. Use qualitative hypotheses only; "
+                "do not output percentages, volumes, competitor facts, or verified browse nodes."
+            ),
+        }
     try:
         from amazon_create.mcp.live_research import (  # noqa: PLC0415
             fetch_live_mcp_research_sync,
             research_bundle_from_snapshots,
         )
 
-        snapshots = fetch_live_mcp_research_sync(settings, query=query)
+        snapshots = fetch_live_mcp_research_sync(
+            settings,
+            query=query,
+            marketplace=marketplace,
+        )
         bundle = research_bundle_from_snapshots(snapshots)
-        return build_research_context(bundle, snapshots=snapshots)
+        context = build_research_context(bundle, snapshots=snapshots)
+        asin_results: list[dict[str, Any]] = []
+        for asin in targets[:6]:
+            asin_snapshots = fetch_live_mcp_research_sync(
+                settings,
+                query=asin,
+                marketplace=marketplace,
+                purpose="asin",
+            )
+            asin_bundle = research_bundle_from_snapshots(asin_snapshots)
+            asin_results.append(
+                {
+                    "asin": asin,
+                    "relationship": "product" if asin == product_asin else "competitor",
+                    "research": build_research_context(
+                        asin_bundle,
+                        snapshots=asin_snapshots,
+                    ),
+                }
+            )
+        category_snapshots = fetch_live_mcp_research_sync(
+            settings,
+            query=product_name,
+            marketplace=marketplace,
+            purpose="category",
+        )
+        category_bundle = research_bundle_from_snapshots(category_snapshots)
+        context["asin_research"] = asin_results
+        context["category_research"] = build_research_context(
+            category_bundle,
+            snapshots=category_snapshots,
+        )
+        context["marketplace"] = marketplace
+        return context
     except Exception as exc:  # noqa: BLE001 — research is best-effort
         return {
             "mode": "degraded",
@@ -57,7 +116,12 @@ def _has_remote_keys(settings: Settings) -> bool:
     )
 
 
-def _fixture_context(query: str) -> dict[str, Any]:
+def _fixture_context(
+    query: str,
+    *,
+    marketplace: str,
+    asin_targets: tuple[str, ...] = (),
+) -> dict[str, Any]:
     """Deterministic offline keyword context from fixture files when useful."""
     try:
         import asyncio
@@ -74,7 +138,7 @@ def _fixture_context(query: str) -> dict[str, Any]:
                 for role in roles:
                     try:
                         result = await session.call(
-                            ResearchQuery(role=role, query=query, marketplace="US")
+                            ResearchQuery(role=role, query=query, marketplace=marketplace)
                         )
                     except Exception:  # noqa: BLE001
                         continue
@@ -93,6 +157,27 @@ def _fixture_context(query: str) -> dict[str, Any]:
     ctx = build_research_context(empty)
     ctx["mode"] = "fixture"
     ctx["query"] = query
+    ctx["marketplace"] = marketplace
+    ctx["asin_research"] = [
+        {
+            "asin": asin,
+            "relationship": "product" if index == 0 else "competitor",
+            "research": {
+                "mode": "fixture",
+                "marketplace": marketplace,
+                "guidance": "Fixture ASIN context only; verify against live Amazon data.",
+            },
+        }
+        for index, asin in enumerate(asin_targets)
+    ]
+    ctx["category_research"] = {
+        "mode": "fixture",
+        "marketplace": marketplace,
+        "guidance": (
+            "No verified browse node in fixture mode; return candidates as "
+            "manual_validation_required."
+        ),
+    }
     ctx["allowed_keywords"] = keywords
     ctx["guidance"] = (
         "Fixture/mock research only. Keywords are market context, not product facts."

@@ -54,7 +54,8 @@ def test_staged_approve_flow() -> None:
     session = new_session()
     session = apply_user_message(
         session,
-        "产品: Mesh Zipper Pouch\n站点: US\n规格: A4 mesh bag",
+        "产品: Mesh Zipper Pouch\n站点: US\n产品类型: document bag\n"
+        "父子体: parent\n媒体类目: no\n规格: A4 mesh bag",
         settings=settings,
     )
     assert session.stage == CreationStage.BRIEF
@@ -79,7 +80,8 @@ def test_image_handoff_yes() -> None:
     session = new_session()
     session = apply_user_message(
         session,
-        "产品: Mesh Zipper Pouch\n站点: US\n规格: A4",
+        "产品: Mesh Zipper Pouch\n站点: US\n产品类型: document bag\n"
+        "父子体: parent\n媒体类目: no\n规格: A4",
         settings=settings,
     )
     for _ in range(14):
@@ -91,8 +93,14 @@ def test_image_handoff_yes() -> None:
             session = apply_user_message(session, "认可", settings=settings)
     assert session.stage == CreationStage.IMAGE_HANDOFF
     session = apply_user_message(session, "需要图片", settings=settings)
-    assert session.stage == CreationStage.COMPLETED
+    assert session.stage == CreationStage.IMAGE_ANALYSIS
     assert session.image_design_requested is True
+    session = apply_user_message(session, "认可", settings=settings)
+    assert session.stage == CreationStage.IMAGE_PLAN
+    assert session.image_design_plan is not None
+    assert len(session.image_design_plan.images) == 8
+    session = apply_user_message(session, "认可", settings=settings)
+    assert session.stage == CreationStage.COMPLETED
 
 
 def test_image_skip_from_final_copy() -> None:
@@ -101,7 +109,8 @@ def test_image_skip_from_final_copy() -> None:
     session = new_session()
     session = apply_user_message(
         session,
-        "产品: Mesh Zipper Pouch\n站点: US\n规格: A4",
+        "产品: Mesh Zipper Pouch\n站点: US\n产品类型: document bag\n"
+        "父子体: parent\n媒体类目: no\n规格: A4",
         settings=settings,
     )
     for _ in range(14):
@@ -201,3 +210,143 @@ def test_mock_keywords_stage_returns_keywords_payload() -> None:
     payload = _stage_payload(prompt)
     assert "core_keywords" in payload
     assert "title" not in payload
+
+
+def test_category_rules_are_loaded_for_matching_product() -> None:
+    from amazon_create.rules import category_rule_names
+
+    brief = parse_brief_message(
+        "产品: Mesh Zipper Pouch\n站点: US\n产品类型: A4 document bag\n规格: A4"
+    )
+    assert "mesh-zipper-pouches.md" in category_rule_names(brief)
+
+
+def test_extended_deliverable_fields_are_preserved() -> None:
+    settings = Settings(mock=True)
+    session = new_session(fast_path=True)
+    session.brief = parse_brief_message(
+        "产品: Hardware Cloth\n站点: US\n规格: material: galvanized steel"
+    )
+    session = run_fast_path(session, settings=settings)
+    assert session.deliverable is not None
+    assert session.deliverable.product_description
+    assert session.deliverable.shopping_questions
+    assert session.deliverable.a_plus_modules
+    assert session.deliverable.keyword_intent_map
+    assert session.deliverable.category_recommendations
+
+
+def test_sensitive_category_requires_human_review() -> None:
+    settings = Settings(mock=True)
+    session = new_session(fast_path=True)
+    session.brief = parse_brief_message(
+        "产品: Kids Squishy Toys\n站点: US\n产品类型: children party favors\n规格: count: 24"
+    )
+    session = run_fast_path(session, settings=settings)
+    assert session.brief.sensitive_category is True
+    assert session.stage == CreationStage.FINAL_COPY
+    assert session.human_review_confirmed is False
+    session = apply_user_message(session, "人工审核通过", settings=settings)
+    assert session.human_review_confirmed is True
+    assert session.stage == CreationStage.IMAGE_HANDOFF
+
+
+def test_unsubstantiated_percentages_are_removed() -> None:
+    from amazon_create.pipeline.creation_pipeline import _strip_unsubstantiated_percentages
+
+    payload = {"audiences": [{"segment": "parents", "share": "53%"}]}
+    cleaned = _strip_unsubstantiated_percentages(payload, {"market_metrics": []})
+    assert "53%" not in str(cleaned)
+    assert "未测量" in str(cleaned)
+
+
+def test_marketplace_language_and_asins_are_parsed() -> None:
+    brief = parse_brief_message(
+        "产品: Mesh Zipper Pouch\n站点: 德国\n产品 ASIN: B012345678\n"
+        "竞品: B087654321, B0ABCDEFGH\n父子体: child\n媒体类目: no\n"
+        "变体属性: color: blue, size: A4"
+    )
+    assert brief.marketplace == "DE"
+    assert brief.language == "de"
+    assert brief.product_asin == "B012345678"
+    assert brief.competitors == ("B087654321", "B0ABCDEFGH")
+    assert brief.listing_scope == "child"
+    assert brief.listing_scope_confirmed is True
+    assert brief.media_status_confirmed is True
+    assert brief.variation_values == {"color": "blue", "size": "A4"}
+
+
+def test_media_title_is_not_clamped_to_non_media_limit() -> None:
+    title = "A" * 90
+    deliverable, _ = finalize_deliverable(
+        {
+            "title": title,
+            "item_highlights": "Verified media edition details",
+            "bullets": [{"text": f"Bullet {i}"} for i in range(5)],
+        },
+        media_category=True,
+    )
+    assert deliverable.title == title
+    assert "media_title_limit_requires_live_category_validator" in deliverable.unresolved
+    assert deliverable.policy_status == "WARN"
+
+
+def test_parent_title_blocks_child_variation_value() -> None:
+    deliverable, _ = finalize_deliverable(
+        {
+            "title": "Brand Storage Pouch Blue",
+            "item_highlights": "Mesh document storage for school and office",
+            "bullets": [{"text": f"Bullet {i}"} for i in range(5)],
+        },
+        listing_scope="parent",
+        variation_values={"color": "Blue"},
+    )
+    assert deliverable.policy_status == "BLOCK"
+    assert any("parent title contains child" in issue for issue in deliverable.policy_issues)
+
+
+def test_no_credentials_never_uses_fixture_market_data() -> None:
+    from amazon_create.research_bridge import load_research_context
+
+    research = load_research_context(
+        Settings(mock=False),
+        product_name="Mesh Zipper Pouch",
+        marketplace="UK",
+        specs="A4",
+    )
+    assert research["mode"] == "unavailable"
+    assert research["marketplace"] == "UK"
+    assert research["allowed_keywords"] == []
+
+
+def test_supporting_copy_is_evidence_scanned() -> None:
+    deliverable, auth = finalize_deliverable(
+        {
+            "title": "Steel Garden Barrier",
+            "item_highlights": "Outdoor project mesh",
+            "bullets": [{"text": f"Bullet {i}"} for i in range(5)],
+            "product_description": "This product is UL Listed for guaranteed safety",
+        }
+    )
+    assert auth.allowed is False
+    assert deliverable.policy_status == "BLOCK"
+
+
+def test_brief_gate_requires_policy_context_fields() -> None:
+    settings = Settings(mock=True)
+    session = new_session()
+    session = apply_user_message(session, "产品: Storage Pouch\n站点: US", settings=settings)
+    session = apply_user_message(session, "认可", settings=settings)
+    assert session.stage == CreationStage.BRIEF
+    assert "产品类型/类目" in session.last_message_zh
+    assert "是否 media 类目" in session.last_message_zh
+    assert "父体/子体范围" in session.last_message_zh
+
+
+def test_image_task_type_is_preserved() -> None:
+    settings = Settings(mock=True)
+    session = new_session()
+    session.stage = CreationStage.IMAGE_HANDOFF
+    session = apply_user_message(session, "图片优化", settings=settings)
+    assert session.image_task_type == "image_optimization"
+    assert session.stage == CreationStage.IMAGE_ANALYSIS

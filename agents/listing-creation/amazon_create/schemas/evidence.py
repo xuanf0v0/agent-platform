@@ -206,10 +206,11 @@ def authorize_copy_claims(
     title: str,
     item_highlights: str,
     bullets: list[str],
+    supporting_copy: list[str] | tuple[str, ...] = (),
     ledger: tuple[FactRow, ...] | list[FactRow],
 ) -> ClaimAuthorizationResult:
     """Block unsourced hard claims and absolute hype in final copy text."""
-    full = " ".join([title, item_highlights, *bullets]).casefold()
+    full = " ".join([title, item_highlights, *bullets, *supporting_copy]).casefold()
     verified_hard = {
         row.fact.casefold(): row
         for row in ledger

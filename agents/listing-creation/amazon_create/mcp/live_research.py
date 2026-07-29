@@ -67,6 +67,8 @@ async def research_endpoint(
     endpoint: RemoteMcpEndpoint,
     *,
     query: str,
+    marketplace: str = "US",
+    purpose: str = "market",
     timeout_s: float = _PROVIDER_TIMEOUT_S,
 ) -> McpToolSnapshot:
     """Initialize, list tools, and call preferred research tools for one endpoint."""
@@ -122,11 +124,11 @@ async def research_endpoint(
                             ResearchGap(code="payload_too_large", provider=endpoint.name),
                         ),
                     )
-            targets = pick_research_tools(endpoint.name, names)
+            targets = pick_research_tools(endpoint.name, names, purpose)
             if not targets:
                 gap_code = (
                     "tool_not_allowlisted"
-                    if preferred_tool_names(endpoint.name)
+                    if preferred_tool_names(endpoint.name, purpose)
                     else "provider_not_allowlisted"
                 )
                 return McpToolSnapshot(
@@ -150,6 +152,7 @@ async def research_endpoint(
                         provider=endpoint.name,
                         tool_name=tool_name,
                         query=query,
+                        marketplace=marketplace,
                         input_schema_json=(
                             input_schema_json(tool_obj) if tool_obj is not None else ""
                         ),
@@ -235,6 +238,8 @@ async def fetch_live_mcp_research(
     settings: McpEndpointSettings,
     *,
     query: str,
+    marketplace: str = "US",
+    purpose: str = "market",
     timeout_s: float = _PROVIDER_TIMEOUT_S,
 ) -> list[McpToolSnapshot]:
     """Fetch live research from every configured remote MCP provider.
@@ -256,13 +261,21 @@ async def fetch_live_mcp_research(
                     lambda ep=endpoint: research_sif_endpoint(
                         ep,
                         query=query,
+                        marketplace=marketplace,
+                        purpose=purpose,
                         timeout_s=max(timeout_s, 45.0),
                     )
                 )
             )
         else:
             snapshots.append(
-                await research_endpoint(endpoint, query=query, timeout_s=timeout_s)
+                await research_endpoint(
+                    endpoint,
+                    query=query,
+                    marketplace=marketplace,
+                    purpose=purpose,
+                    timeout_s=timeout_s,
+                )
             )
     return snapshots
 
@@ -271,6 +284,8 @@ def fetch_live_mcp_research_sync(
     settings: McpEndpointSettings,
     *,
     query: str,
+    marketplace: str = "US",
+    purpose: str = "market",
     timeout_s: float = _PROVIDER_TIMEOUT_S,
 ) -> list[McpToolSnapshot]:
     """Sync wrapper for Streamlit / CLI (runs the async research path)."""
@@ -279,6 +294,8 @@ def fetch_live_mcp_research_sync(
         return await fetch_live_mcp_research(
             settings,
             query=query,
+            marketplace=marketplace,
+            purpose=purpose,
             timeout_s=timeout_s,
         )
 

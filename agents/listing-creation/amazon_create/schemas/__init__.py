@@ -1,6 +1,6 @@
 """Public schema exports for creation + MCP stubs."""
 
-from amazon_create.schemas.deliverable import CreationDeliverable
+from amazon_create.schemas.deliverable import CreationDeliverable, ImageDesignPlan
 from amazon_create.schemas.evidence import (
     EVIDENCE_POLICY,
     EvidenceSourceKind,
@@ -16,6 +16,7 @@ __all__ = [
     "CreationDeliverable",
     "CreationSession",
     "CreationStage",
+    "ImageDesignPlan",
     "EvidenceSourceKind",
     "EvidenceTier",
     "FactRow",

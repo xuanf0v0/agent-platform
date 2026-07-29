@@ -5,11 +5,16 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pydantic import ValidationError
+
 from amazon_create.config import Settings
+from amazon_create.image_assets import images_for_session
 from amazon_create.llm import get_llm
 from amazon_create.pipeline.postflight import finalize_deliverable
 from amazon_create.research_bridge import load_research_context
+from amazon_create.rules import load_rule_context
 from amazon_create.schemas.brief import ProductBrief
+from amazon_create.schemas.deliverable import ImageDesignPlan
 from amazon_create.schemas.evidence import (
     EVIDENCE_POLICY,
     EvidenceSourceKind,
@@ -28,8 +33,83 @@ from amazon_create.schemas.workflow import (
 )
 from amazon_create.utils.json_extract import JsonExtractError, extract_json_object
 
-_IMAGE_YES = frozenset({"需要图片", "进入图片", "图片设计", "要图片", "yes image", "image yes"})
+_IMAGE_YES = frozenset(
+    {
+        "需要图片",
+        "进入图片",
+        "图片设计",
+        "图片优化",
+        "图片分析",
+        "要图片",
+        "yes image",
+        "image yes",
+        "image design",
+        "image optimization",
+        "image analysis",
+    }
+)
 _IMAGE_NO = frozenset({"不需要图片", "跳过图片", "不要图片", "no image", "skip image"})
+_IMAGE_TASKS = {
+    "图片设计": "image_design",
+    "图片优化": "image_optimization",
+    "图片分析": "image_analysis",
+    "image design": "image_design",
+    "image optimization": "image_optimization",
+    "image analysis": "image_analysis",
+}
+_HUMAN_REVIEW = frozenset({"人工审核通过", "合规终审通过", "human review approved"})
+_SENSITIVE_TERMS = frozenset(
+    {
+        "儿童",
+        "婴儿",
+        "婴幼儿",
+        "食品",
+        "补剂",
+        "医疗",
+        "医用",
+        "化妆品",
+        "保健",
+        "kids",
+        "children",
+        "baby",
+        "infant",
+        "food",
+        "supplement",
+        "medical",
+        "cosmetic",
+        "health",
+        "safety",
+        "electronic",
+        "electrical",
+        "健康",
+        "安全用品",
+        "电子产品",
+    }
+)
+_MARKET_ALIASES = {
+    "美国": "US",
+    "美国站": "US",
+    "英国": "UK",
+    "英国站": "UK",
+    "德国": "DE",
+    "法国": "FR",
+    "意大利": "IT",
+    "西班牙": "ES",
+    "日本": "JP",
+    "加拿大": "CA",
+    "墨西哥": "MX",
+}
+_MARKET_LANGUAGES = {
+    "US": "en",
+    "UK": "en-GB",
+    "CA": "en-CA",
+    "DE": "de",
+    "FR": "fr",
+    "IT": "it",
+    "ES": "es",
+    "JP": "ja",
+    "MX": "es-MX",
+}
 
 
 def new_session(*, fast_path: bool = False) -> CreationSession:
@@ -45,8 +125,17 @@ def parse_brief_message(text: str, existing: ProductBrief | None = None) -> Prod
     product = _field(blob, r"(?:产品|产品名|product)\s*[:：]\s*(.+)")
     market = _field(blob, r"(?:站点|市场|marketplace|market)\s*[:：]\s*(.+)")
     brand = _field(blob, r"(?:品牌|brand)\s*[:：]\s*(.+)")
+    product_type = _field(blob, r"(?:产品类型|类目|product\s*type|category)\s*[:：]\s*(.+)")
+    language = _field(blob, r"(?:语言|language)\s*[:：]\s*(.+)")
+    listing_scope = _field(blob, r"(?:Listing\s*范围|父子体|scope)\s*[:：]\s*(parent|child|父体|子体)")
+    media_status = _field(blob, r"(?:媒体类目|media\s*category)\s*[:：]\s*(yes|no|true|false|是|否)")
+    variations = _field(blob, r"(?:变体属性|variation(?:\s*values?)?)\s*[:：]\s*(.+)")
     specs = _field(blob, r"(?:规格|参数|specs?)\s*[:：]\s*(.+)")
-    competitors = _field(blob, r"(?:竞品|competitor|asin)\s*[:：]\s*(.+)")
+    competitors = _field(
+        blob,
+        r"^(?:竞品|competitors?|asin)\s*[:：]\s*(.+)$",
+    )
+    product_asin = _field(blob, r"(?:产品\s*ASIN|product\s*asin)\s*[:：]\s*(B0[A-Z0-9]{8})")
 
     if not product and lines:
         first = lines[0]
@@ -55,13 +144,37 @@ def parse_brief_message(text: str, existing: ProductBrief | None = None) -> Prod
 
     market_norm = (market or base.marketplace or "").strip()
     if market_norm:
-        market_norm = market_norm.upper().replace("美国", "US").replace("英国", "UK")
+        market_norm = _MARKET_ALIASES.get(market_norm, market_norm.upper())
 
     competitor_asins = base.competitors
     if competitors:
         found = tuple(re.findall(r"B0[A-Z0-9]{8}", competitors.upper()))
         if found:
             competitor_asins = found
+    product_asin_value = (product_asin or base.product_asin).upper()
+    if product_asin_value:
+        competitor_asins = tuple(asin for asin in competitor_asins if asin != product_asin_value)
+
+    sensitive_blob = " ".join((product or base.product_name, product_type or base.product_type, blob)).casefold()
+    sensitive_category = base.sensitive_category or any(
+        token in sensitive_blob for token in _SENSITIVE_TERMS
+    )
+    inferred_media = any(
+        token in sensitive_blob
+        for token in ("book", "music", "video", "dvd", "图书", "音乐", "影视")
+    )
+    media_status_confirmed = base.media_status_confirmed or bool(media_status)
+    if media_status:
+        media_category = media_status.casefold() in {"yes", "true", "是"}
+    else:
+        media_category = base.media_category or inferred_media
+    scope_value = (listing_scope or base.listing_scope or "parent").casefold()
+    scope_value = "child" if scope_value in {"child", "子体"} else "parent"
+    scope_confirmed = base.listing_scope_confirmed or bool(listing_scope)
+    variation_values = dict(base.variation_values)
+    if variations:
+        for key, value in _extract_key_value_pairs(variations):
+            variation_values[key] = value
 
     ledger: list[FactRow] = list(base.fact_ledger)
     if product or base.product_name:
@@ -148,10 +261,19 @@ def parse_brief_message(text: str, existing: ProductBrief | None = None) -> Prod
     return ProductBrief(
         product_name=(product or base.product_name).strip(),
         marketplace=market_norm or base.marketplace,
-        language=base.language,
+        language=(
+            language
+            or (_MARKET_LANGUAGES.get(market_norm) if not base.marketplace else "")
+            or base.language
+        ).strip(),
+        product_type=(product_type or base.product_type).strip(),
+        media_category=media_category,
+        media_status_confirmed=media_status_confirmed,
+        listing_scope=scope_value,
+        listing_scope_confirmed=scope_confirmed,
+        variation_values=variation_values,
+        product_asin=product_asin_value,
         brand=(brand or base.brand).strip(),
-        product_type=base.product_type,
-        media_category=base.media_category,
         specs_text=specs_val,
         competitors=competitor_asins,
         keywords_seed=base.keywords_seed,
@@ -159,7 +281,7 @@ def parse_brief_message(text: str, existing: ProductBrief | None = None) -> Prod
         forbidden_phrases=base.forbidden_phrases,
         notes=blob if not product else base.notes,
         fact_ledger=tuple(ledger[-40:]),
-        sensitive_category=base.sensitive_category,
+        sensitive_category=sensitive_category,
     )
 
 
@@ -184,6 +306,17 @@ def _extract_spec_pairs(specs: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def _extract_key_value_pairs(text: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for part in re.split(r"[,;|，；]", text):
+        if not part.strip():
+            continue
+        match = re.match(r"\s*([^:=：]+)\s*[:=：]\s*(.+?)\s*$", part)
+        if match:
+            pairs.append((match.group(1).strip(), match.group(2).strip()))
+    return pairs
+
+
 def _field(blob: str, pattern: str) -> str:
     match = re.search(pattern, blob, flags=re.IGNORECASE | re.MULTILINE)
     return match.group(1).strip() if match else ""
@@ -196,6 +329,17 @@ def next_stage(stage: CreationStage, *, skip_competitor: bool = False) -> Creati
     if skip_competitor and nxt == CreationStage.COMPETITOR:
         return CreationStage.SELLING_POINTS
     return nxt
+
+
+def _research_for_session(runtime: Settings, session: CreationSession) -> dict[str, Any]:
+    return load_research_context(
+        runtime,
+        product_name=session.brief.product_name,
+        marketplace=session.brief.marketplace,
+        specs=session.brief.specs_text,
+        product_asin=session.brief.product_asin,
+        competitor_asins=session.brief.competitors,
+    )
 
 
 def run_stage(
@@ -234,20 +378,27 @@ def run_stage(
         )
         return session
 
-    research = load_research_context(
-        runtime,
-        product_name=session.brief.product_name,
-        marketplace=session.brief.marketplace,
-        specs=session.brief.specs_text,
+    rules = load_rule_context(
+        session.brief,
+        include_image=stage in {CreationStage.IMAGE_ANALYSIS, CreationStage.IMAGE_PLAN},
     )
+    session.active_rule_files = rules.files
+    research = _research_for_session(runtime, session)
     # MCP rows enter ledger only as third-party market context
     for row in research_as_ledger_rows(research):
         session.brief = session.brief.with_fact(row)
 
-    llm = get_llm(runtime, role="writer")
-    system = _system_prompt(stage)
+    llm = get_llm(runtime, role="vision" if stage == CreationStage.IMAGE_ANALYSIS else "writer")
+    system = _system_prompt(stage, rules.content)
     user = _user_prompt(session, stage, research)
-    raw = llm.complete(system, user, json_mode=True)
+    image_assets = images_for_session(session.session_id) if stage == CreationStage.IMAGE_ANALYSIS else ()
+    session.image_asset_count = len(image_assets)
+    raw = llm.complete(
+        system,
+        user,
+        json_mode=True,
+        images=[asset.data_url for asset in image_assets],
+    )
     try:
         payload = extract_json_object(raw)
     except JsonExtractError:
@@ -258,13 +409,16 @@ def run_stage(
 
     # Force hypothesis labeling on audience percentages if any slipped in
     if stage == CreationStage.AUDIENCE:
-        payload = _strip_invented_percentages(payload)
+        payload = _strip_unsubstantiated_percentages(payload, research)
 
     if stage == CreationStage.FINAL_COPY:
         deliverable, auth = finalize_deliverable(
             payload,
             brand=session.brief.brand,
             media_category=session.brief.media_category,
+            listing_scope=session.brief.listing_scope,
+            variation_values=session.brief.variation_values,
+            sensitive_category=session.brief.sensitive_category,
             fact_ledger=session.brief.fact_ledger,
         )
         session.deliverable = deliverable
@@ -284,6 +438,49 @@ def run_stage(
             )
             if deliverable.unresolved:
                 summary += " 待补：" + "；".join(deliverable.unresolved[:6])
+    elif stage == CreationStage.IMAGE_PLAN:
+        try:
+            session.image_design_plan = ImageDesignPlan.model_validate(payload)
+        except ValidationError:
+            session.status = "failed"
+            session.error = "image_plan_invalid"
+            session.last_message_zh = "图片方案结构不完整，必须包含主图和 7 张辅图，请重试。"
+            return session
+        required_scores = {
+            "platform_compliance",
+            "selling_point_clarity",
+            "dimensions_resolution",
+            "color_palette",
+            "background_design",
+            "layout",
+            "detail_optimization",
+            "image_copy",
+        }
+        if not required_scores.issubset(session.image_design_plan.image_scores):
+            session.status = "failed"
+            session.error = "image_scores_incomplete"
+            session.last_message_zh = "图片方案缺少八维评分，请重试。"
+            return session
+        if any(
+            score < 0 or score > 10
+            for score in session.image_design_plan.image_scores.values()
+        ):
+            session.status = "failed"
+            session.error = "image_score_out_of_range"
+            session.last_message_zh = "图片评分必须在 0–10 分之间，请重试。"
+            return session
+        main_image = session.image_design_plan.images[0]
+        main_label = main_image.image.casefold()
+        background = main_image.background.casefold()
+        image_copy = main_image.image_copy.strip().casefold()
+        if "main" not in main_label or not any(
+            token in background for token in ("pure white", "255,255,255", "纯白")
+        ) or image_copy not in {"", "no text", "无文字"}:
+            session.status = "failed"
+            session.error = "main_image_policy_failed"
+            session.last_message_zh = "主图方案必须是纯白背景、无文字，并明确标记为 Main Image。"
+            return session
+        summary = f"{session.image_task_type} 的主图 + 7 张辅图方案已生成，等待确认。"
     else:
         label = STAGE_LABEL_ZH.get(stage, stage.value)
         summary = str(payload.get("notes_zh") or f"「{label}」草稿已就绪。")
@@ -369,6 +566,13 @@ def approve_stage(
                 "请补充已确认产品事实或修改文案后重试。"
             )
             return session
+        if session.brief.sensitive_category and not session.human_review_confirmed:
+            session.status = "awaiting_approval"
+            session.last_message_zh = (
+                "该产品属于敏感品类，必须完成人工合规终审后才能确认成稿。"
+                "请由合规人员审核后回复「人工审核通过」。"
+            )
+            return session
         if art is not None:
             session.set_artifact(art.model_copy(update={"approved": True}))
         session.revision += 1
@@ -384,6 +588,25 @@ def approve_stage(
         session.stage = CreationStage.COMPLETED
         session.status = "completed"
         session.last_message_zh = "流程完成（未进入图片设计）。可复制最终文案字段。"
+        return session
+
+    if stage == CreationStage.IMAGE_ANALYSIS:
+        if art is not None:
+            session.set_artifact(art.model_copy(update={"approved": True}))
+        session.revision += 1
+        session.stage = CreationStage.IMAGE_PLAN
+        return run_stage(session, settings=runtime)
+
+    if stage == CreationStage.IMAGE_PLAN:
+        if session.image_design_plan is None:
+            session.last_message_zh = "尚无完整图片方案，无法确认。"
+            return session
+        if art is not None:
+            session.set_artifact(art.model_copy(update={"approved": True}))
+        session.revision += 1
+        session.stage = CreationStage.COMPLETED
+        session.status = "completed"
+        session.last_message_zh = "文案与主图 + 7 张辅图方案均已确认，流程完成。"
         return session
 
     if art is not None:
@@ -421,6 +644,19 @@ def apply_user_message(
         session.fast_path = True
         return run_fast_path(session, settings=runtime)
 
+    if low in _HUMAN_REVIEW or any(token in low for token in _HUMAN_REVIEW):
+        session.human_review_confirmed = True
+        session.revision += 1
+        if session.stage == CreationStage.FINAL_COPY:
+            return approve_stage(session, settings=runtime)
+        session.last_message_zh = "已记录人工合规终审通过。"
+        return session
+
+    for trigger, task_type in _IMAGE_TASKS.items():
+        if trigger in low:
+            session.image_task_type = task_type
+            break
+
     # Check NO before YES: "不需要图片" contains "需要图片"
     if low in _IMAGE_NO or any(
         k in low for k in ("不需要图片", "跳过图片", "不要图片", "no image", "skip image")
@@ -432,7 +668,7 @@ def apply_user_message(
             return approve_stage(session, settings=runtime)
 
     if low in _IMAGE_YES or (
-        any(k in low for k in ("需要图片", "进入图片", "图片设计", "要图片", "yes image"))
+        any(k in low for k in _IMAGE_YES)
         and "不" not in text
         and "no " not in low
     ):
@@ -443,15 +679,10 @@ def apply_user_message(
             art = session.artifact(CreationStage.IMAGE_HANDOFF)
             if art is not None:
                 session.set_artifact(art.model_copy(update={"approved": True}))
-            session.stage = CreationStage.COMPLETED
-            session.status = "completed"
+            session.stage = CreationStage.IMAGE_ANALYSIS
+            session.status = "active"
             session.revision += 1
-            session.last_message_zh = (
-                "已记录：进入图片设计交接。\n"
-                "请切换独立 skill `amazon-image-design`，按主图 + 7 张辅图规划"
-                "（本仓不执行图片生成）。文案字段保持不变。"
-            )
-            return session
+            return run_stage(session, settings=runtime)
 
     if low in {"跳过竞品", "skip competitor", "无竞品"}:
         session.brief = session.brief.model_copy(update={"competitors": ()})
@@ -461,8 +692,9 @@ def apply_user_message(
         return session
 
     if low in {"认可", "确认", "approve", "ok", "通过"}:
-        if session.stage == CreationStage.BRIEF and not session.brief.is_ready:
-            session.last_message_zh = "请先提供产品名和目标站点（marketplace）。"
+        if session.stage == CreationStage.BRIEF and session.brief.required_context_missing():
+            missing = "、".join(session.brief.required_context_missing())
+            session.last_message_zh = f"Brief 仍缺少：{missing}。这些字段会影响政策和本土化，不能跳过确认。"
             session.status = "awaiting_approval"
             return session
         return approve_stage(session, settings=runtime)
@@ -490,17 +722,14 @@ def run_fast_path(
         return session
 
     session.fast_path = True
-    research = load_research_context(
-        runtime,
-        product_name=session.brief.product_name,
-        marketplace=session.brief.marketplace,
-        specs=session.brief.specs_text,
-    )
+    rules = load_rule_context(session.brief)
+    session.active_rule_files = rules.files
+    research = _research_for_session(runtime, session)
     for row in research_as_ledger_rows(research):
         session.brief = session.brief.with_fact(row)
 
     llm = get_llm(runtime, role="writer")
-    system = _system_prompt(CreationStage.FINAL_COPY)
+    system = _system_prompt(CreationStage.FINAL_COPY, rules.content)
     user = _user_prompt(session, CreationStage.FINAL_COPY, research)
     raw = llm.complete(system, user, json_mode=True)
     try:
@@ -514,6 +743,9 @@ def run_fast_path(
         payload,
         brand=session.brief.brand,
         media_category=session.brief.media_category,
+        listing_scope=session.brief.listing_scope,
+        variation_values=session.brief.variation_values,
+        sensitive_category=session.brief.sensitive_category,
         fact_ledger=session.brief.fact_ledger,
     )
     session.deliverable = deliverable
@@ -537,6 +769,14 @@ def run_fast_path(
             "请补充已确认产品资料。"
         )
         return session
+    if session.brief.sensitive_category and not session.human_review_confirmed:
+        session.stage = CreationStage.FINAL_COPY
+        session.status = "awaiting_approval"
+        session.last_message_zh = (
+            "直接输出已生成合规草稿，但该产品属于敏感品类。"
+            "必须由合规人员审核后回复「人工审核通过」，才能进入图片交接。"
+        )
+        return session
 
     session.stage = CreationStage.IMAGE_HANDOFF
     return run_stage(session, settings=runtime)
@@ -550,6 +790,10 @@ def _brief_summary(brief: ProductBrief) -> str:
         missing.append("目标站点")
     if not brief.specs_text:
         missing.append("规格参数")
+    if not brief.listing_scope_confirmed:
+        missing.append("父体/子体范围")
+    if not brief.media_status_confirmed:
+        missing.append("是否 media 类目")
     missing_s = "、".join(missing) if missing else "无"
     verified_n = len(brief.verified_product_facts())
     return (
@@ -584,15 +828,39 @@ def _checklist_block(session: CreationSession) -> str:
     return "审批进度：\n" + "\n".join(session.gate_checklist_zh())
 
 
-def _strip_invented_percentages(payload: dict[str, Any]) -> dict[str, Any]:
-    """Remove percentage claims unless basis is measured (mock-safe)."""
-    text = str(payload)
-    if "%" in text or "％" in text:
-        payload = {**payload, "notes_zh": str(payload.get("notes_zh") or "") + "（已避免无数据集百分比）"}
-    return payload
+def _strip_unsubstantiated_percentages(
+    payload: dict[str, Any],
+    research: dict[str, Any],
+) -> dict[str, Any]:
+    """Remove percentages unless retrieved market evidence contains that exact value."""
+    measured_text = str(research.get("market_metrics") or "")
+
+    def clean(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: clean(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [clean(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(clean(item) for item in value)
+        if not isinstance(value, str):
+            return value
+
+        def replace(match: re.Match[str]) -> str:
+            token = match.group(0)
+            return token if token in measured_text else "未测量"
+
+        return re.sub(r"\b\d+(?:\.\d+)?\s*[%％]", replace, value)
+
+    cleaned = clean(payload)
+    if cleaned != payload:
+        cleaned["notes_zh"] = (
+            str(cleaned.get("notes_zh") or "")
+            + "（无可引用数据集的百分比已替换为未测量）"
+        )
+    return cleaned
 
 
-def _system_prompt(stage: CreationStage) -> str:
+def _system_prompt(stage: CreationStage, rule_content: str) -> str:
     return (
         "You are an Amazon listing creation agent with approval gates and evidence control. "
         "Post-2026-07-27 non-media Title ≤75 chars, Item Highlights ≤125 chars, "
@@ -600,9 +868,13 @@ def _system_prompt(stage: CreationStage) -> str:
         "Never invent specs, certifications, performance numbers, or percentages. "
         "Mark gaps as 待补. Lower evidence tiers cannot override higher facts. "
         "Third-party MCP and competitor data are market context only. "
+        "Follow the packaged rules below in source-of-truth order. "
+        "For sensitive categories, label the draft as requiring human compliance review. "
+        "Never fabricate customer Q&A; output shopping-question coverage as editorial guidance. "
         "Return JSON only. "
         f"Current stage:{stage.value}\n"
-        f"{evidence_prompt_block()}"
+        f"{evidence_prompt_block()}\n"
+        f"PACKAGED RULES:\n{rule_content}"
     )
 
 
@@ -630,7 +902,19 @@ def _user_prompt(
         f"approved_artifacts:{approved}\n"
         f"research_market_context_only:{research}\n"
         f"user_notes:{session.brief.notes}\n"
+        f"image_task_type:{session.image_task_type}\n"
+        f"uploaded_image_count:{session.image_asset_count}\n"
         "Respond with stage-appropriate JSON. "
         "For final_copy include title, title_zh, item_highlights, item_highlights_zh, "
-        "bullets[{text,text_zh}], search_terms, unresolved[], notes_zh."
+        "bullets[{text,text_zh}], search_terms, product_description, "
+        "product_description_zh, shopping_questions[{question,answer_basis,answer_zh}], "
+        "a_plus_modules[{module,purpose,content}], keyword_intent_map{}, "
+        "category_recommendations[{path,node_id_path,basis,verification}], "
+        "claim_evidence_map[{claim,source,status}], "
+        "attribute_checklist[], compliance_notes[], unresolved[], notes_zh. "
+        "For image_analysis include source_analysis[], image_scores{}, upload_requests[], "
+        "compliance_notes[]. For image_plan include task_type, research_basis[], "
+        "source_analysis[], image_scores{}, exactly 8 images with image, selling_point, "
+        "color_palette, product_angle, background, layout, detail_treatment, image_copy, "
+        "plus upload_requests[] and compliance_notes[]."
     )

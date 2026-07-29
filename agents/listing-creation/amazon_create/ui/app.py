@@ -80,6 +80,37 @@ def _render_deliverable(session: CreationSession) -> None:
             st.caption(b.text_zh)
     st.markdown("**Search Terms**")
     st.code(d.search_terms, language=None)
+    if d.product_description:
+        st.markdown("**Product Description**")
+        st.code(d.product_description, language=None)
+        if d.product_description_zh:
+            st.caption(d.product_description_zh)
+    if d.shopping_questions:
+        with st.expander("Alexa for Shopping 问题覆盖", expanded=False):
+            for item in d.shopping_questions:
+                st.markdown(f"**{item.question}**")
+                st.write(item.answer_basis)
+                if item.answer_zh:
+                    st.caption(item.answer_zh)
+    if d.a_plus_modules:
+        with st.expander("A+ / EBC 模块建议", expanded=False):
+            for item in d.a_plus_modules:
+                st.markdown(f"**{item.module}** · {item.purpose}")
+                st.write(item.content)
+    if d.category_recommendations:
+        with st.expander("类目 / Browse Node 候选", expanded=False):
+            for item in d.category_recommendations:
+                st.write(
+                    f"{item.path} · {item.node_id_path or 'nodeId 待查'} · "
+                    f"{item.verification}"
+                )
+    if d.keyword_intent_map:
+        with st.expander("关键词与意图布局", expanded=False):
+            st.json(d.keyword_intent_map)
+    if d.claim_evidence_map:
+        with st.expander("宣称与证据映射", expanded=False):
+            for item in d.claim_evidence_map:
+                st.write(f"{item.claim} → {item.source} · {item.status}")
     if d.unresolved:
         st.warning("待补: " + "；".join(d.unresolved))
     if d.policy_issues:
@@ -117,6 +148,9 @@ def main() -> None:
         if session.claim_authorization is not None:
             auth = session.claim_authorization
             st.write(f"证据授权: `{'OK' if auth.allowed else 'BLOCK'}`")
+        st.write(f"已加载规则: `{len(session.active_rule_files)}` 份")
+        if session.brief.sensitive_category:
+            st.warning("敏感品类：最终稿必须人工合规终审")
         with st.expander("证据等级", expanded=False):
             for line in session.evidence_policy_zh():
                 st.caption(line)
@@ -145,6 +179,14 @@ def main() -> None:
                 {"role": "assistant", "content": updated.last_message_zh}
             )
             st.rerun()
+        if session.brief.sensitive_category and not session.human_review_confirmed:
+            if st.button("人工审核通过", use_container_width=True):
+                updated = apply_user_message(session, "人工审核通过", settings=settings)
+                st.session_state.creation_session = updated
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": updated.last_message_zh}
+                )
+                st.rerun()
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
@@ -153,10 +195,18 @@ def main() -> None:
     show_copy = session.deliverable is not None and session.stage in {
         CreationStage.FINAL_COPY,
         CreationStage.IMAGE_HANDOFF,
+        CreationStage.IMAGE_ANALYSIS,
+        CreationStage.IMAGE_PLAN,
         CreationStage.COMPLETED,
     }
     if show_copy:
         _render_deliverable(session)
+    if session.image_design_plan is not None:
+        st.subheader("主图 + 7 张辅图方案")
+        st.dataframe(
+            [item.model_dump(mode="json") for item in session.image_design_plan.images],
+            use_container_width=True,
+        )
 
     prompt = st.chat_input(
         "Brief / 修改意见 / 认可 / 跳过竞品 / 直接输出 / 需要图片 / 不需要图片"

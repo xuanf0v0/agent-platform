@@ -3,8 +3,19 @@
 from __future__ import annotations
 
 from amazon_create.compliance.lint_bridge import lint_deliverable
-from amazon_create.compliance.paste_ready import clamp_paste_ready_lengths
-from amazon_create.schemas.deliverable import BulletDeliverable, CreationDeliverable
+from amazon_create.compliance.paste_ready import (
+    PASTE_ITEM_HIGHLIGHTS_MAX,
+    clamp_paste_ready_lengths,
+    clamp_plain_text,
+)
+from amazon_create.schemas.deliverable import (
+    BulletDeliverable,
+    CategoryRecommendation,
+    ClaimEvidenceMap,
+    CreationDeliverable,
+    PlusModule,
+    ShoppingQuestion,
+)
 from amazon_create.schemas.evidence import (
     ClaimAuthorizationResult,
     FactRow,
@@ -20,18 +31,89 @@ def _coerce_text(value: object) -> str:
     return str(value or "")
 
 
+def _coerce_string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(str(item).strip() for item in value if str(item).strip())
+
+
+def _coerce_question_list(value: object) -> list[ShoppingQuestion]:
+    if not isinstance(value, list):
+        return []
+    questions: list[ShoppingQuestion] = []
+    for item in value[:12]:
+        if not isinstance(item, dict) or not str(item.get("question") or "").strip():
+            continue
+        questions.append(ShoppingQuestion.model_validate(item))
+    return questions
+
+
+def _coerce_plus_modules(value: object) -> list[PlusModule]:
+    if not isinstance(value, list):
+        return []
+    modules: list[PlusModule] = []
+    for item in value[:10]:
+        if not isinstance(item, dict) or not str(item.get("module") or "").strip():
+            continue
+        modules.append(PlusModule.model_validate(item))
+    return modules
+
+
+def _coerce_categories(value: object) -> list[CategoryRecommendation]:
+    if not isinstance(value, list):
+        return []
+    categories: list[CategoryRecommendation] = []
+    for item in value[:6]:
+        if not isinstance(item, dict) or not str(item.get("path") or "").strip():
+            continue
+        categories.append(
+            CategoryRecommendation.model_validate(
+                {**item, "verification": "manual_validation_required"}
+            )
+        )
+    return categories
+
+
+def _coerce_claim_map(value: object) -> list[ClaimEvidenceMap]:
+    if not isinstance(value, list):
+        return []
+    rows: list[ClaimEvidenceMap] = []
+    for item in value[:30]:
+        if not isinstance(item, dict) or not str(item.get("claim") or "").strip():
+            continue
+        rows.append(ClaimEvidenceMap.model_validate(item))
+    return rows
+
+
+def _coerce_keyword_map(value: object) -> dict[str, list[str]]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, list[str]] = {}
+    for key, items in value.items():
+        if isinstance(items, list):
+            result[str(key)] = [str(item).strip() for item in items if str(item).strip()]
+    return result
+
+
 def finalize_deliverable(
     raw: dict[str, object],
     *,
     brand: str = "",
     media_category: bool = False,
+    listing_scope: str = "parent",
+    variation_values: dict[str, str] | None = None,
+    sensitive_category: bool = False,
     fact_ledger: tuple[FactRow, ...] | list[FactRow] = (),
 ) -> tuple[CreationDeliverable, ClaimAuthorizationResult]:
     """Build deliverable with length clamp, claim auth, and lint."""
     title = strip_md_bold(_coerce_text(raw.get("title"))).strip()
     highlights = strip_md_bold(_coerce_text(raw.get("item_highlights"))).strip()
     highlights_zh = _coerce_text(raw.get("item_highlights_zh"))
-    title, highlights = clamp_paste_ready_lengths(title, highlights)
+    if media_category:
+        title = strip_md_bold(title).strip()
+        highlights = clamp_plain_text(highlights, PASTE_ITEM_HIGHLIGHTS_MAX)
+    else:
+        title, highlights = clamp_paste_ready_lengths(title, highlights)
 
     bullets_raw = raw.get("bullets") or []
     bullets: list[BulletDeliverable] = []
@@ -62,10 +144,25 @@ def finalize_deliverable(
     unresolved = raw.get("unresolved") or []
     unresolved_t = tuple(str(x) for x in unresolved) if isinstance(unresolved, list) else ()
 
+    product_description = _coerce_text(raw.get("product_description")).strip()
+    product_description_zh = _coerce_text(raw.get("product_description_zh")).strip()
+    shopping_questions = _coerce_question_list(raw.get("shopping_questions"))
+    a_plus_modules = _coerce_plus_modules(raw.get("a_plus_modules"))
+    keyword_intent_map = _coerce_keyword_map(raw.get("keyword_intent_map"))
+    category_recommendations = _coerce_categories(raw.get("category_recommendations"))
+    claim_evidence_map = _coerce_claim_map(raw.get("claim_evidence_map"))
+    attribute_checklist = _coerce_string_tuple(raw.get("attribute_checklist"))
+    compliance_notes = _coerce_string_tuple(raw.get("compliance_notes"))
+
     auth = authorize_copy_claims(
         title=title,
         item_highlights=highlights,
         bullets=[b.text for b in bullets],
+        supporting_copy=[
+            product_description,
+            *(question.answer_basis for question in shopping_questions),
+            *(module.content for module in a_plus_modules),
+        ],
         ledger=fact_ledger,
     )
     unresolved_merged = tuple(dict.fromkeys([*unresolved_t, *auth.unresolved]))
@@ -80,6 +177,15 @@ def finalize_deliverable(
         bullets=bullets[:5],
         search_terms=search_terms,
         search_terms_bytes=len(search_terms.encode("utf-8")),
+        product_description=product_description,
+        product_description_zh=product_description_zh,
+        shopping_questions=shopping_questions,
+        a_plus_modules=a_plus_modules,
+        keyword_intent_map=keyword_intent_map,
+        category_recommendations=category_recommendations,
+        claim_evidence_map=claim_evidence_map,
+        attribute_checklist=attribute_checklist,
+        compliance_notes=compliance_notes,
         unresolved=unresolved_merged,
         notes_zh=str(raw.get("notes_zh") or ""),
     )
@@ -105,6 +211,47 @@ def finalize_deliverable(
         if status == "PASS":
             status = "WARN"
 
+    normalized_title = " ".join(title.casefold().split())
+    variation_map = variation_values or {}
+    if listing_scope == "parent":
+        for key, value in variation_map.items():
+            normalized_value = " ".join(value.casefold().split())
+            if normalized_value and normalized_value in normalized_title:
+                issues.append(f"variation: parent title contains child {key}={value}")
+                status = "BLOCK"
+    elif listing_scope == "child" and variation_map:
+        missing_variations = [
+            f"{key}={value}"
+            for key, value in variation_map.items()
+            if " ".join(value.casefold().split()) not in normalized_title
+        ]
+        if missing_variations:
+            issues.append("variation: child title missing " + ", ".join(missing_variations))
+            if status == "PASS":
+                status = "WARN"
+
+    normalized_highlights = " ".join(highlights.casefold().split())
+    if normalized_title and normalized_highlights == normalized_title:
+        issues.append("cross_field: Item Highlights duplicate Title")
+        if status == "PASS":
+            status = "WARN"
+    normalized_bullets = [" ".join(b.text.casefold().split()) for b in bullets]
+    if len(set(normalized_bullets)) != len(normalized_bullets):
+        issues.append("cross_field: duplicate Bullet Points")
+        if status == "PASS":
+            status = "WARN"
+    if media_category:
+        unresolved_merged = tuple(
+            dict.fromkeys([*unresolved_merged, "media_title_limit_requires_live_category_validator"])
+        )
+        issues.append("manual_check: retrieve current media category title rule")
+        if status == "PASS":
+            status = "WARN"
+    if sensitive_category:
+        issues.append("manual_check: sensitive category requires human compliance review")
+        if status == "PASS":
+            status = "WARN"
+
     stats = lint.get("stats") or {}
     deliverable = draft.model_copy(
         update={
@@ -115,6 +262,7 @@ def finalize_deliverable(
             "search_terms_bytes": int(
                 stats.get("search_terms_utf8_bytes") or draft.search_terms_bytes
             ),
+            "unresolved": unresolved_merged,
             "policy_status": status,
             "policy_issues": tuple(issues[:30]),
         }
