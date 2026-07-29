@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import subprocess
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -144,32 +145,67 @@ class ProcessManager:
             raise ValueError(f"Unknown agent: {agent_id}")
 
         info = self._processes[agent_id]
-        if info.status != AgentStatus.RUNNING or info.process is None:
-            if info.status == AgentStatus.STARTING:
-                info.status = AgentStatus.STOPPED
-            return info
-
+        process = info.process
+        info.status = AgentStatus.STOPPED
+        info.process = None
+        info.pid = 0
+        info.started_at = 0
         try:
-            # Send SIGTERM to the process group
-            os.killpg(os.getpgid(info.process.pid), signal.SIGTERM)
-
-            try:
-                await asyncio.wait_for(info.process.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                # Force kill if still alive
-                os.killpg(os.getpgid(info.process.pid), signal.SIGKILL)
-                await info.process.wait()
-        except ProcessLookupError:
-            pass  # Already dead
+            if process is not None:
+                await self._terminate_tracked_process(process)
+            await self._terminate_port_listeners(info.port)
         except Exception as exc:
             info.error_message = str(exc)
 
-        info.process = None
-        info.pid = 0
-        info.status = AgentStatus.STOPPED
-        info.started_at = 0
-
         return info
+
+    async def _terminate_tracked_process(self, process: asyncio.subprocess.Process) -> None:
+        """Terminate the complete process group created for one managed agent."""
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            try:
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            except ProcessLookupError:
+                return
+            await process.wait()
+
+    async def _terminate_port_listeners(self, port: int) -> None:
+        """Stop stale or detached processes that still listen on an agent port."""
+        for pid in self._listener_pids(port):
+            if pid == os.getpid():
+                continue
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                continue
+        await asyncio.sleep(0.2)
+        for pid in self._listener_pids(port):
+            if pid == os.getpid():
+                continue
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    @staticmethod
+    def _listener_pids(port: int) -> tuple[int, ...]:
+        """Return PIDs currently listening on a TCP port using the host lsof."""
+        result = subprocess.run(  # noqa: S603
+            ["lsof", "-tiTCP:" + str(port), "-sTCP:LISTEN"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return tuple(
+            int(line)
+            for line in result.stdout.splitlines()
+            if line.strip().isdigit()
+        )
 
     def get_logs(self, agent_id: str, tail: int = 200) -> list[str]:
         """Return recent log lines from the buffer."""
