@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Test / type / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.basedpyright/
+playwright-report/
+test-results/
+
+# Local agent, QA, and scratch artifacts
+.omo/
+.reasonix/
+.tmp/
+.debug-journal.md
+*.pid
+*.out.log
+*.err.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Runtime outputs
+outputs/
+*.log
+
+# Local Streamlit secrets
+.streamlit/secrets.toml
+
+# Vendored optional MCP checkouts (local only)
+.vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Frontend
+web/node_modules/
+amazon_create/web_dist/
+*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
+
+# Local runtime
+.env
+.amazon_create/

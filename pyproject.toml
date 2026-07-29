@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["amazon_create*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+amazon_create = [
+    "mcp/fixtures/*.json",
+    "resources/amazon-listing-policy-and-semantic-copy/**/*",
+    "resources/amazon-listing-creation/**/*",
+    "resources/amazon-cosmo-rufus-copywriting/**/*",
+    "prompts/agents/*.md",
+    "web_dist/**/*",
+]
+
+[project]
+name = "amazon-create"
+version = "0.1.0"
+description = "Staged Amazon listing creation agent (Title + Item Highlights + Bullets + Search Terms)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "anyio>=4,<5",
+    "mcp>=1,<2",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "httpx",
+    "openai",
+    "streamlit",
+    "typer",
+    "rich",
+    "typing_extensions",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.23,<2",
+    "ruff>=0.12,<1",
+]
+
+[project.scripts]
+amz-create = "amazon_create.cli:app"
+amz-create-api = "amazon_create.api:app"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["amazon_create", "tests"]
