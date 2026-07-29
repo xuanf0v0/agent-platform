@@ -1,0 +1,36 @@
+{
+  "role": "shopper",
+  "claims": [
+    {
+      "key": "intent_signal",
+      "value": "Compatibility with laptop models is top purchase driver",
+      "authority": "shopper_intent_analysis",
+      "confidence": 0.91
+    },
+    {
+      "key": "pain_point",
+      "value": "Buyers frustrated by hubs that overheat during extended use",
+      "authority": "shopper_intent_analysis",
+      "confidence": 0.88
+    },
+    {
+      "key": "purchase_barrier",
+      "value": "Price sensitivity at $30+ threshold; 53% abandon cart",
+      "authority": "shopper_intent_analysis",
+      "confidence": 0.84
+    },
+    {
+      "key": "feature_preference",
+      "value": "HDMI 4K support is the most desired feature",
+      "authority": "shopper_intent_analysis",
+      "confidence": 0.92
+    },
+    {
+      "key": "review_sentiment",
+      "value": "Positive mentions: build quality; Negative mentions: driver issues",
+      "authority": "shopper_intent_analysis",
+      "confidence": 0.86
+    }
+  ],
+  "fixture": true
+}

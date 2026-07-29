@@ -1,0 +1,8 @@
+{
+  "audience": {"summary": "Mobile professionals who need one compact connection hub", "segments": ["remote workers", "creators", "students"], "pain_points": ["too few laptop ports", "bulky adapters"]},
+  "motives": [{"motive": "Connect every daily peripheral", "evidence": "One hub replaces several adapters", "weight": 1.0}],
+  "feedback": {"positives": ["compact", "simple setup"], "negatives": ["short captive cables"], "quotes": []},
+  "product_intro": "A portable seven-in-one USB-C hub for displays, cards, data, and power",
+  "instruction_decode": "Lead with connectivity and compatibility; keep claims factual",
+  "competitor": {"parameters": ["seven ports", "4K output"], "selling_points": ["portable expansion"], "copy_notes": ["clear compatibility language"], "raw_blocks": []}
+}

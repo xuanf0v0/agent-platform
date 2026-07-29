@@ -1,0 +1,39 @@
+﻿# Amazon hard-ban wordlist (R10)
+# ============================================================
+# Each line: phrase|category|severity
+#
+# Categories:
+#   promo       - promotional claims always hard-fail in titles
+#   decorative  - banned symbols (C/R/TM here; ASCII set also in check.py)
+#   subjective  - soft claims: hard fail in strict_amazon, warning in sop_seo
+#
+# Severity: high / medium / low
+# Matching: promo + subjective are case-insensitive; decorative is presence.
+# Pipe char and ASCII decorative set are enforced in check.py (CSV delimiter).
+# ============================================================
+
+# -- Promo (always hard fail) --------------------------------
+free shipping|promo|high
+free delivery|promo|high
+100% quality guaranteed|promo|high
+100% guaranteed|promo|high
+money back guarantee|promo|high
+risk free|promo|high
+risk-free|promo|high
+limited time offer|promo|high
+act now|promo|medium
+
+# -- Subjective (mode-aware) ---------------------------------
+best seller|subjective|medium
+best-seller|subjective|medium
+hot item|subjective|medium
+no.1 best|subjective|medium
+number one|subjective|medium
+top rated|subjective|medium
+must have|subjective|low
+must-have|subjective|low
+
+# -- Decorative multi-byte symbols ---------------------------
+©|decorative|high
+®|decorative|high
+™|decorative|high
