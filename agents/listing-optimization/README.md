@@ -1,4 +1,4 @@
-# Amazon Listing Agent Console
+# Amazon Copy Agent
 
 A Streamlit listing workbench with a **product control plane** (diagnose → approve → generate)
 on top of a **safe copy execution plane** (research → review → optimize → postflight).
@@ -6,26 +6,10 @@ Paste one existing listing (optional ASIN for display only), review Stage 1 diag
 copy-side funnel hypotheses, then approve generation. Only postflight-safe copy is exposed
 for copying. Clarification gates still pause when facts cannot be safely inferred.
 
-The packaged React workbench exposes the optimization workflows from one interface:
-
-- **Listing 安全优化 Agent** — diagnose, approve, safely rewrite, and postflight-check existing copy
-- **Copy workflow tools** — guided Bullet optimization, SEO analysis, and copy analysis
-
-Build and start the standalone optimization agent:
-
-```bash
-uv sync --extra dev
-cd web
-npm run start
-```
-
-Open `http://127.0.0.1:8000`. The external Agent Manager can launch this service on its assigned port.
-
-The project also exposes **four execution surfaces**:
+The project exposes **three execution surfaces**:
 
 | Pipeline | Entry point | Description |
 |----------|-------------|-------------|
-| **React workbench** | `amz-copy-api serve` + `npm run dev` in `web/` | React + TypeScript SPA backed by the existing automatic pipeline through a minimal JSON API. This is the progressive replacement for the Streamlit UI. |
 | **Automatic (product path)** | `streamlit run amazon_copy/ui/app.py` / `run_automatic_optimization` | Default two-stage: Stage 1 diagnose → `awaiting_approval` → seller clicks **生成上传稿** → Stage 2 safe rewrite + postflight. Optional ASIN identity display; optional **跳过诊断，直接优化** (`skip_approval=True`) restores one-shot optimize. |
 | **Studio graph** (advanced) | `StudioService.optimize_listing()` / `run_studio_pipeline()` | 6-stage multi-agent graph: research → 3 parallel writers → critique & revise → hard gates → dual judges → integrate. Produces a `CandidateArtifact` with exactly 3 titles and 5 bullets. Not the default product path. |
 | **Legacy CLI** (legacy) | `run_pipeline()` / `amz-copy run\|write\|optimize\|seo\|analyze` | Step-by-step research → write → optimize → SEO → scorecard. The five CLI commands still work unchanged. |
@@ -43,23 +27,6 @@ pip install -e ".[dev]"
 ```
 
 ## Automatic Streamlit workflow (product path)
-
-## React workbench
-
-Install the Python project and frontend dependencies, then run the API and Vite in separate terminals:
-
-```bash
-uv sync --extra dev
-uv run amz-copy-api serve
-cd web
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`. Vite proxies `/api` to `http://127.0.0.1:8000`.
-The React client supports diagnosis, approval, clarification resume, direct optimization,
-copy-ready output, and diagnostic inspection. The Streamlit interface remains available during
-the gradual migration.
 
 Run the web app and paste the complete existing listing into the single `原始 Listing` box.
 Optionally enter a 10-character **ASIN** for identity display only (never guessed; paste-only

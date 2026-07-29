@@ -123,6 +123,8 @@ class ProcessManager:
 
     async def _ensure_frontend(self, agent: dict[str, Any], cwd: Path) -> None:
         """Install and build one agent frontend if no packaged index exists."""
+        if not agent.get("web_dir") or not agent.get("web_dist"):
+            return
         if (cwd / agent["web_dist"]).is_file():
             return
         web_dir = cwd / agent["web_dir"]
