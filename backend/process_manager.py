@@ -57,11 +57,20 @@ class ProcessManager:
     def get_status(self, agent_id: str) -> ProcessInfo | None:
         return self._processes.get(agent_id)
 
+    def reconcile_status(self, agent_id: str) -> ProcessInfo | None:
+        """Refresh one agent from its actual listening port."""
+        info = self._processes.get(agent_id)
+        if info is not None:
+            self._reconcile_listener_status(info)
+        return info
+
     def get_all_statuses(self) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
         for agent in list_agents():
             aid = agent["id"]
             info = self._processes.get(aid)
+            if info is not None:
+                self._reconcile_listener_status(info)
             status = info.status if info else AgentStatus.STOPPED
             result.append(
                 {
@@ -88,6 +97,7 @@ class ProcessManager:
             raise ValueError(f"Unknown agent: {agent_id}")
 
         info = self._processes[agent_id]
+        self._reconcile_listener_status(info)
         if info.status == AgentStatus.RUNNING:
             return info
 
@@ -121,6 +131,21 @@ class ProcessManager:
 
         return info
 
+    def _reconcile_listener_status(self, info: ProcessInfo) -> None:
+        """Recover lifecycle state after the manager process restarts."""
+        listener_pids = self._listener_pids(info.port)
+        if listener_pids:
+            if info.status is not AgentStatus.STARTING:
+                info.status = AgentStatus.RUNNING
+            if info.pid == 0:
+                info.pid = listener_pids[0]
+            return
+        if info.status is AgentStatus.RUNNING:
+            info.status = AgentStatus.STOPPED
+            info.process = None
+            info.pid = 0
+            info.started_at = 0
+
     async def _ensure_frontend(self, agent: dict[str, Any], cwd: Path) -> None:
         """Install and build one agent frontend if no packaged index exists."""
         if not agent.get("web_dir") or not agent.get("web_dist"):
@@ -152,6 +177,7 @@ class ProcessManager:
         info.process = None
         info.pid = 0
         info.started_at = 0
+        info.error_message = ""
         try:
             if process is not None:
                 await self._terminate_tracked_process(process)
@@ -178,21 +204,26 @@ class ProcessManager:
 
     async def _terminate_port_listeners(self, port: int) -> None:
         """Stop stale or detached processes that still listen on an agent port."""
-        for pid in self._listener_pids(port):
-            if pid == os.getpid():
-                continue
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
-                continue
+        self._signal_listener_groups(port, signal.SIGTERM)
         await asyncio.sleep(0.2)
+        self._signal_listener_groups(port, signal.SIGKILL)
+
+    def _signal_listener_groups(self, port: int, sig: signal.Signals) -> None:
+        """Signal complete process groups for every detached port listener."""
+        own_group = os.getpgrp()
+        signaled_groups: set[int] = set()
         for pid in self._listener_pids(port):
-            if pid == os.getpid():
+            try:
+                process_group = os.getpgid(pid)
+            except ProcessLookupError:
+                continue
+            if process_group == own_group or process_group in signaled_groups:
                 continue
             try:
-                os.kill(pid, signal.SIGKILL)
+                os.killpg(process_group, sig)
+                signaled_groups.add(process_group)
             except ProcessLookupError:
-                pass
+                continue
 
     @staticmethod
     def _listener_pids(port: int) -> tuple[int, ...]:

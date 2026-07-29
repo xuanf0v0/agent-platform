@@ -48,6 +48,11 @@ test-results/
 outputs/
 *.log
 
+# React production assets
+web/node_modules/
+amazon_copy/web_dist/
+*.tsbuildinfo
+
 # Local Streamlit secrets
 .streamlit/secrets.toml
 

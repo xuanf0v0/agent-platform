@@ -1,6 +1,6 @@
 # Amazon Copy Agent
 
-A Streamlit listing workbench with a **product control plane** (diagnose → approve → generate)
+A React listing workbench with a **product control plane** (diagnose → approve → generate)
 on top of a **safe copy execution plane** (research → review → optimize → postflight).
 Paste one existing listing (optional ASIN for display only), review Stage 1 diagnosis and
 copy-side funnel hypotheses, then approve generation. Only postflight-safe copy is exposed
@@ -10,7 +10,7 @@ The project exposes **three execution surfaces**:
 
 | Pipeline | Entry point | Description |
 |----------|-------------|-------------|
-| **Automatic (product path)** | `streamlit run amazon_copy/ui/app.py` / `run_automatic_optimization` | Default two-stage: Stage 1 diagnose → `awaiting_approval` → seller clicks **生成上传稿** → Stage 2 safe rewrite + postflight. Optional ASIN identity display; optional **跳过诊断，直接优化** (`skip_approval=True`) restores one-shot optimize. |
+| **Automatic (product path)** | `amz-copy-api --port 8502` / `run_automatic_optimization` | React workbench served by the API: Stage 1 diagnose → `awaiting_approval` → seller clicks **生成上传稿** → Stage 2 safe rewrite + postflight. Optional ASIN identity display; optional **跳过诊断，直接优化** (`skip_approval=True`) restores one-shot optimize. |
 | **Studio graph** (advanced) | `StudioService.optimize_listing()` / `run_studio_pipeline()` | 6-stage multi-agent graph: research → 3 parallel writers → critique & revise → hard gates → dual judges → integrate. Produces a `CandidateArtifact` with exactly 3 titles and 5 bullets. Not the default product path. |
 | **Legacy CLI** (legacy) | `run_pipeline()` / `amz-copy run\|write\|optimize\|seo\|analyze` | Step-by-step research → write → optimize → SEO → scorecard. The five CLI commands still work unchanged. |
 
@@ -26,7 +26,25 @@ cd D:\demo\amazon_copy_agent
 pip install -e ".[dev]"
 ```
 
-## Automatic Streamlit workflow (product path)
+## Automatic React workflow (product path)
+
+The default interface is the packaged React application. From this directory, run:
+
+```bash
+uv run amz-copy-api --port 8502
+```
+
+For frontend development with hot reload:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+The API remains available on port `8502`; Vite proxies `/api` requests to it.
+
+The original Streamlit interface remains available as a compatibility entry point:
 
 Run the web app and paste the complete existing listing into the single `原始 Listing` box.
 Optionally enter a 10-character **ASIN** for identity display only (never guessed; paste-only

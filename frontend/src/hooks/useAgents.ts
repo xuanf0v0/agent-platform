@@ -21,22 +21,17 @@ export function useAgents() {
 
   useEffect(() => {
     fetchAgents();
-    // Poll every 3 seconds for status updates
-    const interval = setInterval(fetchAgents, 3000);
-    return () => clearInterval(interval);
   }, [fetchAgents]);
 
-  const startAgent = useCallback(async (id: string): Promise<StartStopResponse> => {
-    const result = await api.startAgent(id);
-    await fetchAgents(); // Refresh immediately
+  const toggleAgent = useCallback(async (id: string): Promise<StartStopResponse> => {
+    const result = await api.toggleAgent(id);
+    setAgents((current) => current.map((agent) => (
+      agent.id === id
+        ? { ...agent, ...result, started_at: result.status === 'running' ? Date.now() / 1000 : 0 }
+        : agent
+    )) as AgentInfo[]);
     return result;
-  }, [fetchAgents]);
+  }, []);
 
-  const stopAgent = useCallback(async (id: string): Promise<StartStopResponse> => {
-    const result = await api.stopAgent(id);
-    await fetchAgents();
-    return result;
-  }, [fetchAgents]);
-
-  return { agents, loading, error, startAgent, stopAgent, refresh: fetchAgents };
+  return { agents, loading, error, toggleAgent, refresh: fetchAgents };
 }

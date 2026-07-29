@@ -29,6 +29,10 @@ export const api = {
   stopAgent: (id: string) =>
     request<StartStopResponse>(`/api/agents/${id}/stop`, { method: 'POST' }),
 
+  /** Atomically toggle from the backend's actual process state */
+  toggleAgent: (id: string) =>
+    request<StartStopResponse>(`/api/agents/${id}/toggle`, { method: 'POST' }),
+
   /** Get agent config */
   getConfig: (id: string) => request<ConfigField[]>(`/api/agents/${id}/config`),
 

@@ -82,6 +82,37 @@ async def api_stop_agent(agent_id: str) -> dict[str, Any]:
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
+@app.post("/api/agents/{agent_id}/toggle")
+async def api_toggle_agent(agent_id: str) -> dict[str, Any]:
+    """Atomically start or stop an agent from its reconciled host state."""
+    agent = get_agent(agent_id)
+    if agent is None:
+        return JSONResponse({"error": f"Unknown agent: {agent_id}"}, status_code=404)
+    try:
+        info = process_manager.get_status(agent_id)
+        if info is None:
+            return JSONResponse({"error": "Agent not found"}, status_code=404)
+        process_manager.reconcile_status(agent_id)
+        if info.status == AgentStatus.RUNNING:
+            info = await process_manager.stop(agent_id)
+        else:
+            info = await process_manager.start(agent_id)
+        return {
+            "id": agent_id,
+            "status": info.status.value,
+            "pid": info.pid,
+            "port": info.port,
+            "url": (
+                f"http://localhost:{info.port}"
+                if info.status == AgentStatus.RUNNING
+                else None
+            ),
+            "error_message": info.error_message,
+        }
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
 @app.get("/api/agents/{agent_id}/config")
 async def api_get_config(agent_id: str) -> list[dict[str, Any]]:
     agent = get_agent(agent_id)

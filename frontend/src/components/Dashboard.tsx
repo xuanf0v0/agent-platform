@@ -3,7 +3,7 @@ import AgentCard from './AgentCard';
 import StatusBadge from './StatusBadge';
 
 export default function Dashboard() {
-  const { agents, loading, error, startAgent, stopAgent } = useAgents();
+  const { agents, loading, error, toggleAgent, refresh } = useAgents();
 
   const runningCount = agents.filter((a) => a.status === 'running').length;
   const totalCount = agents.length;
@@ -22,6 +22,9 @@ export default function Dashboard() {
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button className="btn-ghost" onClick={refresh} disabled={loading}>
+              {loading ? '刷新中...' : '↻ 刷新状态'}
+            </button>
             <span style={{ fontSize: '0.8125rem', color: 'var(--lithos-text-soft)' }}>
               {runningCount}/{totalCount} 运行中
             </span>
@@ -60,8 +63,7 @@ export default function Dashboard() {
           <AgentCard
             key={agent.id}
             agent={agent}
-            onStart={startAgent}
-            onStop={stopAgent}
+            onToggle={toggleAgent}
           />
         ))}
       </div>

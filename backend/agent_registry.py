@@ -34,19 +34,9 @@ _AGENT_REGISTRY: Final[dict[str, dict]] = {
         "path": str(_ROOT / "agents" / "listing-optimization"),
         "default_port": 8502,
         "icon": "🔧",
-        "api_command": [
-            "uv",
-            "run",
-            "streamlit",
-            "run",
-            "amazon_copy/ui/app.py",
-            "--server.port",
-            "8502",
-            "--server.headless",
-            "true",
-        ],
-        "web_dir": None,
-        "web_dist": None,
+        "api_command": ["uv", "run", "amz-copy-api", "--port", "8502"],
+        "web_dir": "web",
+        "web_dist": "amazon_copy/web_dist/index.html",
     },
 }
 

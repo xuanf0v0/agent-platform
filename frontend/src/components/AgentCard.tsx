@@ -5,11 +5,10 @@ import AgentDetail from './AgentDetail';
 
 interface Props {
   agent: AgentInfo;
-  onStart: (id: string) => Promise<StartStopResponse>;
-  onStop: (id: string) => Promise<StartStopResponse>;
+  onToggle: (id: string) => Promise<StartStopResponse>;
 }
 
-export default function AgentCard({ agent, onStart, onStop }: Props) {
+export default function AgentCard({ agent, onToggle }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -19,11 +18,7 @@ export default function AgentCard({ agent, onStart, onStop }: Props) {
   const handleToggle = async () => {
     setBusy(true);
     try {
-      if (isRunning) {
-        await onStop(agent.id);
-      } else {
-        await onStart(agent.id);
-      }
+      await onToggle(agent.id);
     } finally {
       setBusy(false);
     }

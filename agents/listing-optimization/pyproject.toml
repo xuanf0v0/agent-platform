@@ -7,7 +7,12 @@ include = ["amazon_copy*"]
 exclude = ["tests*", "prompts*"]
 
 [tool.setuptools.package-data]
-amazon_copy = ["compliance/wordlist.txt", "llm/fixtures/*.json", "mcp/fixtures/*.json"]
+amazon_copy = [
+    "compliance/wordlist.txt",
+    "llm/fixtures/*.json",
+    "mcp/fixtures/*.json",
+    "web_dist/**/*",
+]
 "amazon_copy.prompts" = ["*.md"]
 "amazon_copy.prompts.agents" = ["*.md"]
 "amazon_copy.resources.amazon_copy_optimization" = [
@@ -54,6 +59,7 @@ dev = [
 
 [project.scripts]
 amz-copy = "amazon_copy.cli:app"
+amz-copy-api = "amazon_copy.api:app"
 
 [tool.basedpyright]
 typeCheckingMode = "all"
