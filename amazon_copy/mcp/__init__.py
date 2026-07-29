@@ -1,0 +1,71 @@
+"""MCP protocol and client for Amazon research agents."""
+
+from amazon_copy.mcp.client import (
+    BudgetedSession,
+    CapabilityMissingError,
+    CheckedSession,
+    FakeProvider,
+    FakeSession,
+    McpClientConfig,
+    UnmappedToolError,
+    build_fake_provider,
+)
+from amazon_copy.mcp.protocol import (
+    ALL_ROLES,
+    ResearchClaim,
+    ResearchError,
+    ResearchProvider,
+    ResearchQuery,
+    ResearchResult,
+    ResearchRole,
+    ResearchSession,
+)
+from amazon_copy.mcp.live_research import (
+    McpToolSnapshot,
+    derive_research_query,
+    fetch_live_mcp_research,
+    fetch_live_mcp_research_sync,
+)
+from amazon_copy.mcp.remote_http import (
+    RemoteMcpEndpoint,
+    build_sellersprite_endpoint,
+    build_sif_endpoint,
+    build_sorftime_endpoint,
+    endpoints_from_settings,
+    mask_secret,
+    probe_remote_mcp,
+    redact_secrets,
+    redact_url,
+)
+
+__all__ = [
+    "ALL_ROLES",
+    "BudgetedSession",
+    "CapabilityMissingError",
+    "CheckedSession",
+    "FakeProvider",
+    "FakeSession",
+    "McpClientConfig",
+    "McpToolSnapshot",
+    "RemoteMcpEndpoint",
+    "ResearchClaim",
+    "ResearchError",
+    "ResearchProvider",
+    "ResearchQuery",
+    "ResearchResult",
+    "ResearchRole",
+    "ResearchSession",
+    "UnmappedToolError",
+    "build_fake_provider",
+    "build_sellersprite_endpoint",
+    "build_sif_endpoint",
+    "build_sorftime_endpoint",
+    "derive_research_query",
+    "endpoints_from_settings",
+    "fetch_live_mcp_research",
+    "fetch_live_mcp_research_sync",
+    "mask_secret",
+    "probe_remote_mcp",
+    "redact_secrets",
+    "redact_url",
+]

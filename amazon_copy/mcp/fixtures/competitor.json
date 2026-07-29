@@ -1,0 +1,36 @@
+{
+  "role": "competitor",
+  "claims": [
+    {
+      "key": "competitor_name",
+      "value": "Anker",
+      "authority": "amazon_competitive_analysis",
+      "confidence": 0.94
+    },
+    {
+      "key": "competitor_price",
+      "value": "$39.99",
+      "authority": "amazon_competitive_analysis",
+      "confidence": 0.92
+    },
+    {
+      "key": "competitor_rating",
+      "value": "4.6",
+      "authority": "amazon_competitive_analysis",
+      "confidence": 0.90
+    },
+    {
+      "key": "competitor_bullets",
+      "value": "PowerExpand+ 7-in-1 USB-C Hub with 4K HDMI and 100W PD",
+      "authority": "amazon_competitive_analysis",
+      "confidence": 0.89
+    },
+    {
+      "key": "differentiator",
+      "value": "Our hub includes SD/TF card reader which competitor lacks",
+      "authority": "amazon_competitive_analysis",
+      "confidence": 0.85
+    }
+  ],
+  "fixture": true
+}

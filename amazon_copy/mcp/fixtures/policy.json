@@ -1,0 +1,36 @@
+{
+  "role": "policy",
+  "claims": [
+    {
+      "key": "prohibited_claim",
+      "value": "Cannot claim 'works with Apple' without MFi certification",
+      "authority": "amazon_policy",
+      "confidence": 0.98
+    },
+    {
+      "key": "restricted_keyword",
+      "value": "Premium quality is subjective; avoid without substantiation",
+      "authority": "amazon_policy",
+      "confidence": 0.95
+    },
+    {
+      "key": "warranty_requirement",
+      "value": "Must disclose 30-day return policy in listing",
+      "authority": "amazon_policy",
+      "confidence": 0.97
+    },
+    {
+      "key": "image_requirement",
+      "value": "Main image must be pure white background (RGB 255,255,255)",
+      "authority": "amazon_policy",
+      "confidence": 0.99
+    },
+    {
+      "key": "category_restriction",
+      "value": "Electronics accessories require FCC compliance statement",
+      "authority": "amazon_policy",
+      "confidence": 0.94
+    }
+  ],
+  "fixture": true
+}

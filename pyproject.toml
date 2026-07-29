@@ -1,0 +1,138 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["amazon_copy*"]
+exclude = ["tests*", "prompts*"]
+
+[tool.setuptools.package-data]
+amazon_copy = ["compliance/wordlist.txt", "llm/fixtures/*.json", "mcp/fixtures/*.json", "web_dist/**/*"]
+"amazon_copy.prompts" = ["*.md"]
+"amazon_copy.prompts.agents" = ["*.md"]
+"amazon_copy.resources.amazon_copy_optimization" = [
+    "SKILL.md",
+    "references/*.md",
+    "scripts/*.py",
+    "templates/*.md",
+]
+"amazon_copy.resources.amazon_listing_policy_and_semantic_copy" = [
+    "SKILL.md",
+    "references/*.md",
+    "scripts/*.py",
+]
+
+[project]
+name = "amazon-copy"
+version = "0.1.0"
+description = "Multi-agent Amazon listing copywriter (Title + Bullet Points + SEO + scorecard)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "anyio>=4,<5",
+    "langgraph>=1,<2",
+    "langgraph-checkpoint-sqlite>=3,<4",
+    "mcp>=1,<2",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "httpx",
+    "pyyaml",
+    "openai",
+    "streamlit",
+    "typer",
+    "rich",
+]
+
+[project.optional-dependencies]
+dev = [
+    "basedpyright>=1,<2",
+    "build>=1,<2",
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.23,<2",
+    "ruff>=0.12,<1",
+]
+
+[project.scripts]
+amz-copy = "amazon_copy.cli:app"
+amz-copy-api = "amazon_copy.api:app"
+
+[tool.basedpyright]
+typeCheckingMode = "all"
+pythonVersion = "3.11"
+pythonPlatform = "All"
+include = ["amazon_copy", "tests"]
+exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
+baselineFile = "tests/basedpyright_baseline.json"
+reportUnusedCallResult = "warning"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnusedVariable = "error"
+reportMissingParameterType = "error"
+reportPrivateUsage = "error"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["amazon_copy", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",
+    "ISC001",
+    "D203",
+    "D213",
+    "CPY001",
+    "FBT001",
+    "FBT002",
+    "TD002",
+    "TD003",
+    "FIX002",
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"amazon_copy/agents/**" = [
+    "RUF001",  # Chinese punctuation in agent prompts is intentional
+]
+"amazon_copy/orchestrator/**" = [
+    "PLC0415",  # Local imports avoid circular dependencies / defer heavy imports
+]
+"amazon_copy/ui/**" = [
+    "RUF001",  # Chinese-first UI copy intentionally uses CJK punctuation
+]
+"amazon_copy/review/**" = [
+    "RUF001",
+]
+"tests/**/*.py" = [
+    "S101",
+    "ARG",
+    "PLR2004",
+    "SLF001",
+    "D",
+    "ERA001",
+    "RUF001",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+]
+markers = [
+    "live: Integration test that calls a real LLM (requires OPENAI_API_KEY).",
+]
+filterwarnings = ["error"]
+asyncio_mode = "auto"

@@ -1,0 +1,2594 @@
+[
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "RUF022",
+    "message": "`__all__` is not sorted",
+    "row": 19,
+    "column": 11,
+    "end_row": 24,
+    "end_column": 2
+  },
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `3` with a constant variable",
+    "row": 42,
+    "column": 13,
+    "end_row": 42,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `2` with a constant variable",
+    "row": 48,
+    "column": 13,
+    "end_row": 48,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "ANN401",
+    "message": "Dynamically typed expressions (typing.Any) are disallowed in `raw`",
+    "row": 59,
+    "column": 30,
+    "end_row": 59,
+    "end_column": 33
+  },
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `3` with a constant variable",
+    "row": 126,
+    "column": 25,
+    "end_row": 126,
+    "end_column": 26
+  },
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `5` with a constant variable",
+    "row": 128,
+    "column": 26,
+    "end_row": 128,
+    "end_column": 27
+  },
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "E501",
+    "message": "Line too long (102 > 100)",
+    "row": 206,
+    "column": 101,
+    "end_row": 206,
+    "end_column": 103
+  },
+  {
+    "filename": "amazon_copy/agents/critique.py",
+    "code": "RET504",
+    "message": "Unnecessary assignment to `revisions` before `return` statement",
+    "row": 246,
+    "column": 12,
+    "end_row": 246,
+    "end_column": 21
+  },
+  {
+    "filename": "amazon_copy/agents/hard_gates.py",
+    "code": "C901",
+    "message": "`evaluate_candidate` is too complex (22 > 10)",
+    "row": 21,
+    "column": 5,
+    "end_row": 21,
+    "end_column": 23
+  },
+  {
+    "filename": "amazon_copy/agents/hard_gates.py",
+    "code": "PLR0912",
+    "message": "Too many branches (22 > 12)",
+    "row": 21,
+    "column": 5,
+    "end_row": 21,
+    "end_column": 23
+  },
+  {
+    "filename": "amazon_copy/agents/hard_gates.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `3` with a constant variable",
+    "row": 61,
+    "column": 33,
+    "end_row": 61,
+    "end_column": 34
+  },
+  {
+    "filename": "amazon_copy/agents/hard_gates.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `5` with a constant variable",
+    "row": 71,
+    "column": 34,
+    "end_row": 71,
+    "end_column": 35
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 13,
+    "column": 1,
+    "end_row": 20,
+    "end_column": 92
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "S311",
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "row": 49,
+    "column": 12,
+    "end_row": 49,
+    "end_column": 47
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "S311",
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "row": 50,
+    "column": 12,
+    "end_row": 50,
+    "end_column": 47
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "D416",
+    "message": "Section name should end with a colon (\"Example\")",
+    "row": 65,
+    "column": 5,
+    "end_row": 65,
+    "end_column": 12
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "ARG001",
+    "message": "Unused function argument: `settings`",
+    "row": 116,
+    "column": 5,
+    "end_row": 116,
+    "end_column": 13
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "D416",
+    "message": "Section name should end with a colon (\"Returns\")",
+    "row": 132,
+    "column": 5,
+    "end_row": 132,
+    "end_column": 12
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "D416",
+    "message": "Section name should end with a colon (\"Raises\")",
+    "row": 139,
+    "column": 5,
+    "end_row": 139,
+    "end_column": 11
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "TRY003",
+    "message": "Avoid specifying long messages outside the exception class",
+    "row": 145,
+    "column": 15,
+    "end_row": 145,
+    "end_column": 78
+  },
+  {
+    "filename": "amazon_copy/agents/judging.py",
+    "code": "EM101",
+    "message": "Exception must not use a string literal, assign to variable first",
+    "row": 145,
+    "column": 31,
+    "end_row": 145,
+    "end_column": 77
+  },
+  {
+    "filename": "amazon_copy/agents/scorecard.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 3,
+    "column": 1,
+    "end_row": 11,
+    "end_column": 81
+  },
+  {
+    "filename": "amazon_copy/agents/scorecard.py",
+    "code": "E501",
+    "message": "Line too long (102 > 100)",
+    "row": 10,
+    "column": 101,
+    "end_row": 10,
+    "end_column": 103
+  },
+  {
+    "filename": "amazon_copy/agents/scorecard.py",
+    "code": "Q003",
+    "message": "Change outer quotes to avoid escaping inner quotes",
+    "row": 47,
+    "column": 17,
+    "end_row": 47,
+    "end_column": 76
+  },
+  {
+    "filename": "amazon_copy/agents/scorecard.py",
+    "code": "RUF002",
+    "message": "Docstring contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?",
+    "row": 56,
+    "column": 41,
+    "end_row": 56,
+    "end_column": 42
+  },
+  {
+    "filename": "amazon_copy/agents/scorecard.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `10` with a constant variable",
+    "row": 74,
+    "column": 29,
+    "end_row": 74,
+    "end_column": 31
+  },
+  {
+    "filename": "amazon_copy/compliance/__init__.py",
+    "code": "RUF022",
+    "message": "`__all__` is not sorted",
+    "row": 28,
+    "column": 11,
+    "end_row": 47,
+    "end_column": 2
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "RUF002",
+    "message": "Docstring contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?",
+    "row": 3,
+    "column": 46,
+    "end_row": 3,
+    "end_column": 47
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "TC003",
+    "message": "Move standard library import `collections.abc.Sequence` into a type-checking block",
+    "row": 12,
+    "column": 29,
+    "end_row": 12,
+    "end_column": 37
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?",
+    "row": 57,
+    "column": 38,
+    "end_row": 57,
+    "end_column": 39
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?",
+    "row": 57,
+    "column": 64,
+    "end_row": 57,
+    "end_column": 65
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?",
+    "row": 61,
+    "column": 38,
+    "end_row": 61,
+    "end_column": 39
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?",
+    "row": 61,
+    "column": 73,
+    "end_row": 61,
+    "end_column": 74
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "PERF401",
+    "message": "Use `list.extend` to create a transformed list",
+    "row": 102,
+    "column": 13,
+    "end_row": 104,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "TRY003",
+    "message": "Avoid specifying long messages outside the exception class",
+    "row": 204,
+    "column": 15,
+    "end_row": 204,
+    "end_column": 49
+  },
+  {
+    "filename": "amazon_copy/compliance/paste_ready.py",
+    "code": "EM101",
+    "message": "Exception must not use a string literal, assign to variable first",
+    "row": 204,
+    "column": 26,
+    "end_row": 204,
+    "end_column": 48
+  },
+  {
+    "filename": "amazon_copy/exporters.py",
+    "code": "PERF401",
+    "message": "Use `list.extend` to create a transformed list",
+    "row": 213,
+    "column": 9,
+    "end_row": 213,
+    "end_column": 43
+  },
+  {
+    "filename": "amazon_copy/exporters.py",
+    "code": "C901",
+    "message": "`_studio_report_markdown` is too complex (16 > 10)",
+    "row": 225,
+    "column": 5,
+    "end_row": 225,
+    "end_column": 28
+  },
+  {
+    "filename": "amazon_copy/exporters.py",
+    "code": "PLR0912",
+    "message": "Too many branches (15 > 12)",
+    "row": 225,
+    "column": 5,
+    "end_row": 225,
+    "end_column": 28
+  },
+  {
+    "filename": "amazon_copy/exporters.py",
+    "code": "PERF401",
+    "message": "Use `list.extend` to create a transformed list",
+    "row": 233,
+    "column": 13,
+    "end_row": 233,
+    "end_column": 61
+  },
+  {
+    "filename": "amazon_copy/exporters.py",
+    "code": "PERF401",
+    "message": "Use `list.extend` to create a transformed list",
+    "row": 244,
+    "column": 13,
+    "end_row": 244,
+    "end_column": 38
+  },
+  {
+    "filename": "amazon_copy/exporters.py",
+    "code": "PERF401",
+    "message": "Use `list.extend` to create a transformed list",
+    "row": 249,
+    "column": 13,
+    "end_row": 249,
+    "end_column": 38
+  },
+  {
+    "filename": "amazon_copy/llm/__init__.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 3,
+    "column": 1,
+    "end_row": 10,
+    "end_column": 62
+  },
+  {
+    "filename": "amazon_copy/llm/__init__.py",
+    "code": "E501",
+    "message": "Line too long (142 > 100)",
+    "row": 28,
+    "column": 101,
+    "end_row": 28,
+    "end_column": 143
+  },
+  {
+    "filename": "amazon_copy/llm/__init__.py",
+    "code": "RUF022",
+    "message": "`__all__` is not sorted",
+    "row": 73,
+    "column": 11,
+    "end_row": 83,
+    "end_column": 2
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "F401",
+    "message": "`asyncio` imported but unused",
+    "row": 5,
+    "column": 8,
+    "end_row": 5,
+    "end_column": 15
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?",
+    "row": 80,
+    "column": 39,
+    "end_row": 80,
+    "end_column": 40
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?",
+    "row": 82,
+    "column": 29,
+    "end_row": 82,
+    "end_column": 30
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?",
+    "row": 90,
+    "column": 33,
+    "end_row": 90,
+    "end_column": 34
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?",
+    "row": 92,
+    "column": 29,
+    "end_row": 92,
+    "end_column": 30
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?",
+    "row": 93,
+    "column": 22,
+    "end_row": 93,
+    "end_column": 23
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "TRY301",
+    "message": "Abstract `raise` to an inner function",
+    "row": 176,
+    "column": 13,
+    "end_row": 176,
+    "end_column": 64
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "TRY003",
+    "message": "Avoid specifying long messages outside the exception class",
+    "row": 176,
+    "column": 19,
+    "end_row": 176,
+    "end_column": 64
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "EM101",
+    "message": "Exception must not use a string literal, assign to variable first",
+    "row": 176,
+    "column": 29,
+    "end_row": 176,
+    "end_column": 63
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "TRY301",
+    "message": "Abstract `raise` to an inner function",
+    "row": 179,
+    "column": 13,
+    "end_row": 179,
+    "end_column": 62
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "TRY003",
+    "message": "Avoid specifying long messages outside the exception class",
+    "row": 179,
+    "column": 19,
+    "end_row": 179,
+    "end_column": 62
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "EM101",
+    "message": "Exception must not use a string literal, assign to variable first",
+    "row": 179,
+    "column": 30,
+    "end_row": 179,
+    "end_column": 61
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `75` with a constant variable",
+    "row": 186,
+    "column": 30,
+    "end_row": 186,
+    "end_column": 32
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `125` with a constant variable",
+    "row": 198,
+    "column": 26,
+    "end_row": 198,
+    "end_column": 29
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (103 > 100)",
+    "row": 228,
+    "column": 101,
+    "end_row": 228,
+    "end_column": 104
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (101 > 100)",
+    "row": 232,
+    "column": 101,
+    "end_row": 232,
+    "end_column": 102
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (174 > 100)",
+    "row": 235,
+    "column": 101,
+    "end_row": 235,
+    "end_column": 175
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (161 > 100)",
+    "row": 236,
+    "column": 101,
+    "end_row": 236,
+    "end_column": 162
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (160 > 100)",
+    "row": 237,
+    "column": 101,
+    "end_row": 237,
+    "end_column": 161
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (144 > 100)",
+    "row": 238,
+    "column": 101,
+    "end_row": 238,
+    "end_column": 145
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "RUF001",
+    "message": "String contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?",
+    "row": 239,
+    "column": 82,
+    "end_row": 239,
+    "end_column": 83
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (147 > 100)",
+    "row": 239,
+    "column": 101,
+    "end_row": 239,
+    "end_column": 148
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (109 > 100)",
+    "row": 246,
+    "column": 101,
+    "end_row": 246,
+    "end_column": 110
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (101 > 100)",
+    "row": 247,
+    "column": 101,
+    "end_row": 247,
+    "end_column": 102
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (102 > 100)",
+    "row": 248,
+    "column": 101,
+    "end_row": 248,
+    "end_column": 103
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (163 > 100)",
+    "row": 251,
+    "column": 101,
+    "end_row": 251,
+    "end_column": 164
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (128 > 100)",
+    "row": 252,
+    "column": 101,
+    "end_row": 252,
+    "end_column": 129
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (131 > 100)",
+    "row": 253,
+    "column": 101,
+    "end_row": 253,
+    "end_column": 132
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (140 > 100)",
+    "row": 255,
+    "column": 101,
+    "end_row": 255,
+    "end_column": 141
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (130 > 100)",
+    "row": 265,
+    "column": 101,
+    "end_row": 265,
+    "end_column": 131
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (111 > 100)",
+    "row": 266,
+    "column": 101,
+    "end_row": 266,
+    "end_column": 112
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (118 > 100)",
+    "row": 285,
+    "column": 101,
+    "end_row": 285,
+    "end_column": 119
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (104 > 100)",
+    "row": 287,
+    "column": 101,
+    "end_row": 287,
+    "end_column": 105
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (170 > 100)",
+    "row": 292,
+    "column": 101,
+    "end_row": 292,
+    "end_column": 171
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (111 > 100)",
+    "row": 293,
+    "column": 101,
+    "end_row": 293,
+    "end_column": 112
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (160 > 100)",
+    "row": 294,
+    "column": 101,
+    "end_row": 294,
+    "end_column": 161
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (124 > 100)",
+    "row": 295,
+    "column": 101,
+    "end_row": 295,
+    "end_column": 125
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (134 > 100)",
+    "row": 296,
+    "column": 101,
+    "end_row": 296,
+    "end_column": 135
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (131 > 100)",
+    "row": 298,
+    "column": 101,
+    "end_row": 298,
+    "end_column": 132
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (145 > 100)",
+    "row": 303,
+    "column": 101,
+    "end_row": 303,
+    "end_column": 146
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (134 > 100)",
+    "row": 304,
+    "column": 101,
+    "end_row": 304,
+    "end_column": 135
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (127 > 100)",
+    "row": 305,
+    "column": 101,
+    "end_row": 305,
+    "end_column": 128
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (148 > 100)",
+    "row": 306,
+    "column": 101,
+    "end_row": 306,
+    "end_column": 149
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (112 > 100)",
+    "row": 311,
+    "column": 101,
+    "end_row": 311,
+    "end_column": 113
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (185 > 100)",
+    "row": 313,
+    "column": 101,
+    "end_row": 313,
+    "end_column": 186
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (175 > 100)",
+    "row": 314,
+    "column": 101,
+    "end_row": 314,
+    "end_column": 176
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (183 > 100)",
+    "row": 315,
+    "column": 101,
+    "end_row": 315,
+    "end_column": 184
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (147 > 100)",
+    "row": 316,
+    "column": 101,
+    "end_row": 316,
+    "end_column": 148
+  },
+  {
+    "filename": "amazon_copy/llm/mock.py",
+    "code": "E501",
+    "message": "Line too long (146 > 100)",
+    "row": 317,
+    "column": 101,
+    "end_row": 317,
+    "end_column": 147
+  },
+  {
+    "filename": "amazon_copy/mcp/__init__.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 3,
+    "column": 1,
+    "end_row": 38,
+    "end_column": 2
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "TC003",
+    "message": "Move standard library import `collections.abc.AsyncIterator` into a type-checking block",
+    "row": 13,
+    "column": 29,
+    "end_row": 13,
+    "end_column": 42
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 28,
+    "column": 5,
+    "end_row": 29,
+    "end_column": 54
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 37,
+    "column": 9,
+    "end_row": 37,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 50,
+    "column": 9,
+    "end_row": 50,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 84,
+    "column": 9,
+    "end_row": 84,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 119,
+    "column": 9,
+    "end_row": 119,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 144,
+    "column": 9,
+    "end_row": 144,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "ANN401",
+    "message": "Dynamically typed expressions (typing.Any) are disallowed in `budget`",
+    "row": 147,
+    "column": 17,
+    "end_row": 147,
+    "end_column": 27
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D102",
+    "message": "Missing docstring in public method",
+    "row": 152,
+    "column": 15,
+    "end_row": 152,
+    "end_column": 32
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D102",
+    "message": "Missing docstring in public method",
+    "row": 156,
+    "column": 15,
+    "end_row": 156,
+    "end_column": 19
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 189,
+    "column": 9,
+    "end_row": 189,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D102",
+    "message": "Missing docstring in public method",
+    "row": 194,
+    "column": 15,
+    "end_row": 194,
+    "end_column": 32
+  },
+  {
+    "filename": "amazon_copy/mcp/client.py",
+    "code": "D102",
+    "message": "Missing docstring in public method",
+    "row": 199,
+    "column": 15,
+    "end_row": 199,
+    "end_column": 19
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "TC003",
+    "message": "Move standard library import `collections.abc.AsyncIterator` into a type-checking block",
+    "row": 34,
+    "column": 29,
+    "end_row": 34,
+    "end_column": 42
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "F401",
+    "message": "`amazon_copy.mcp.client.FakeSession` imported but unused",
+    "row": 40,
+    "column": 50,
+    "end_row": 40,
+    "end_column": 61
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "PTH118",
+    "message": "`os.path.join()` should be replaced by `Path` with `/` operator",
+    "row": 50,
+    "column": 16,
+    "end_row": 50,
+    "end_column": 28
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "PTH120",
+    "message": "`os.path.dirname()` should be replaced by `Path.parent`",
+    "row": 50,
+    "column": 29,
+    "end_row": 50,
+    "end_column": 44
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "PTH118",
+    "message": "`os.path.join()` should be replaced by `Path` with `/` operator",
+    "row": 57,
+    "column": 12,
+    "end_row": 57,
+    "end_column": 24
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "PTH123",
+    "message": "`open()` should be replaced by `Path.open()`",
+    "row": 59,
+    "column": 14,
+    "end_row": 59,
+    "end_column": 18
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "ARG002",
+    "message": "Unused method argument: `query`",
+    "row": 150,
+    "column": 26,
+    "end_row": 150,
+    "end_column": 31
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "D301",
+    "message": "Use `r\"\"\"` if any backslashes in a docstring",
+    "row": 189,
+    "column": 5,
+    "end_row": 200,
+    "end_column": 8
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 202,
+    "column": 9,
+    "end_row": 202,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "D205",
+    "message": "1 blank line required between summary line and description",
+    "row": 208,
+    "column": 9,
+    "end_row": 209,
+    "end_column": 56
+  },
+  {
+    "filename": "amazon_copy/mcp/fixture_server.py",
+    "code": "D209",
+    "message": "Multi-line docstring closing quotes should be on a separate line",
+    "row": 208,
+    "column": 9,
+    "end_row": 209,
+    "end_column": 56
+  },
+  {
+    "filename": "amazon_copy/mcp/live_research_data.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP040`)",
+    "row": 46,
+    "column": 40,
+    "end_row": 46,
+    "end_column": 53
+  },
+  {
+    "filename": "amazon_copy/mcp/live_research_data.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP040`)",
+    "row": 85,
+    "column": 70,
+    "end_row": 85,
+    "end_column": 83
+  },
+  {
+    "filename": "amazon_copy/mcp/protocol.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 66,
+    "column": 9,
+    "end_row": 66,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/mcp/remote_probe.py",
+    "code": "SIM108",
+    "message": "Use ternary operator `write_path = Path(argv[idx + 1]) if idx + 1 < len(argv) else _EVIDENCE_DEFAULT` instead of `if`-`else`-block",
+    "row": 72,
+    "column": 9,
+    "end_row": 75,
+    "end_column": 43
+  },
+  {
+    "filename": "amazon_copy/mcp/remote_probe.py",
+    "code": "T201",
+    "message": "`print` found",
+    "row": 79,
+    "column": 9,
+    "end_row": 79,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/mcp/remote_probe.py",
+    "code": "T201",
+    "message": "`print` found",
+    "row": 92,
+    "column": 5,
+    "end_row": 92,
+    "end_column": 10
+  },
+  {
+    "filename": "amazon_copy/mcp/remote_probe.py",
+    "code": "T201",
+    "message": "`print` found",
+    "row": 95,
+    "column": 9,
+    "end_row": 95,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/orchestrator/__init__.py",
+    "code": "RUF022",
+    "message": "`__all__` is not sorted",
+    "row": 14,
+    "column": 11,
+    "end_row": 24,
+    "end_column": 2
+  },
+  {
+    "filename": "amazon_copy/orchestrator/asyncio_pipeline.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP040`)",
+    "row": 43,
+    "column": 53,
+    "end_row": 43,
+    "end_column": 66
+  },
+  {
+    "filename": "amazon_copy/orchestrator/asyncio_pipeline.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP040`)",
+    "row": 44,
+    "column": 38,
+    "end_row": 44,
+    "end_column": 51
+  },
+  {
+    "filename": "amazon_copy/orchestrator/asyncio_pipeline.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP047`)",
+    "row": 102,
+    "column": 28,
+    "end_row": 102,
+    "end_column": 41
+  },
+  {
+    "filename": "amazon_copy/orchestrator/checkpoints.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP035`)",
+    "row": 44,
+    "column": 41,
+    "end_row": 44,
+    "end_column": 54
+  },
+  {
+    "filename": "amazon_copy/orchestrator/checkpoints.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP040`)",
+    "row": 52,
+    "column": 47,
+    "end_row": 52,
+    "end_column": 60
+  },
+  {
+    "filename": "amazon_copy/orchestrator/checkpoints.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP040`)",
+    "row": 53,
+    "column": 44,
+    "end_row": 53,
+    "end_column": 57
+  },
+  {
+    "filename": "amazon_copy/orchestrator/checkpoints.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP040`)",
+    "row": 54,
+    "column": 39,
+    "end_row": 54,
+    "end_column": 52
+  },
+  {
+    "filename": "amazon_copy/orchestrator/studio_graph.py",
+    "code": "PLR0915",
+    "message": "Too many statements (51 > 50)",
+    "row": 99,
+    "column": 11,
+    "end_row": 99,
+    "end_column": 30
+  },
+  {
+    "filename": "amazon_copy/orchestrator/studio_graph.py",
+    "code": "D416",
+    "message": "Section name should end with a colon (\"Returns\")",
+    "row": 125,
+    "column": 5,
+    "end_row": 125,
+    "end_column": 12
+  },
+  {
+    "filename": "amazon_copy/orchestrator/studio_graph.py",
+    "code": "BLE001",
+    "message": "Do not catch blind exception: `Exception`",
+    "row": 216,
+    "column": 12,
+    "end_row": 216,
+    "end_column": 21
+  },
+  {
+    "filename": "amazon_copy/schemas/__init__.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 7,
+    "column": 1,
+    "end_row": 65,
+    "end_column": 2
+  },
+  {
+    "filename": "amazon_copy/schemas/__init__.py",
+    "code": "F401",
+    "message": "`amazon_copy.schemas.agents.WriterLane` imported but unused; consider removing, adding to `__all__`, or using a redundant alias",
+    "row": 22,
+    "column": 5,
+    "end_row": 22,
+    "end_column": 15
+  },
+  {
+    "filename": "amazon_copy/schemas/__init__.py",
+    "code": "RUF022",
+    "message": "`__all__` is not sorted",
+    "row": 67,
+    "column": 11,
+    "end_row": 114,
+    "end_column": 2
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 2,
+    "column": 1,
+    "end_row": 5,
+    "end_column": 67
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "D101",
+    "message": "Missing docstring in public class",
+    "row": 12,
+    "column": 7,
+    "end_row": 12,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "D101",
+    "message": "Missing docstring in public class",
+    "row": 17,
+    "column": 7,
+    "end_row": 17,
+    "end_column": 24
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "D101",
+    "message": "Missing docstring in public class",
+    "row": 25,
+    "column": 7,
+    "end_row": 25,
+    "end_column": 18
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "D101",
+    "message": "Missing docstring in public class",
+    "row": 32,
+    "column": 7,
+    "end_row": 32,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "TRY003",
+    "message": "Avoid specifying long messages outside the exception class",
+    "row": 42,
+    "column": 19,
+    "end_row": 42,
+    "end_column": 87
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "EM101",
+    "message": "Exception must not use a string literal, assign to variable first",
+    "row": 42,
+    "column": 30,
+    "end_row": 42,
+    "end_column": 86
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "TRY003",
+    "message": "Avoid specifying long messages outside the exception class",
+    "row": 79,
+    "column": 19,
+    "end_row": 81,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "EM102",
+    "message": "Exception must not use an f-string literal, assign to variable first",
+    "row": 80,
+    "column": 17,
+    "end_row": 80,
+    "end_column": 67
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "PLR2004",
+    "message": "Magic value used in comparison, consider replacing `10` with a constant variable",
+    "row": 83,
+    "column": 31,
+    "end_row": 83,
+    "end_column": 33
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "TRY003",
+    "message": "Avoid specifying long messages outside the exception class",
+    "row": 84,
+    "column": 23,
+    "end_row": 86,
+    "end_column": 18
+  },
+  {
+    "filename": "amazon_copy/schemas/agents.py",
+    "code": "EM102",
+    "message": "Exception must not use an f-string literal, assign to variable first",
+    "row": 85,
+    "column": 21,
+    "end_row": 85,
+    "end_column": 71
+  },
+  {
+    "filename": "amazon_copy/schemas/studio_input.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `UP035`)",
+    "row": 13,
+    "column": 41,
+    "end_row": 13,
+    "end_column": 54
+  },
+  {
+    "filename": "amazon_copy/studio.py",
+    "code": "D107",
+    "message": "Missing docstring in `__init__`",
+    "row": 53,
+    "column": 9,
+    "end_row": 53,
+    "end_column": 17
+  },
+  {
+    "filename": "amazon_copy/studio.py",
+    "code": "D416",
+    "message": "Section name should end with a colon (\"Returns\")",
+    "row": 72,
+    "column": 9,
+    "end_row": 72,
+    "end_column": 16
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "RUF002",
+    "message": "Docstring contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?",
+    "row": 1,
+    "column": 42,
+    "end_row": 1,
+    "end_column": 43
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 8,
+    "column": 1,
+    "end_row": 32,
+    "end_column": 81
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "TC001",
+    "message": "Move application import `amazon_copy.config.Settings` into a type-checking block",
+    "row": 24,
+    "column": 32,
+    "end_row": 24,
+    "end_column": 40
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "B033",
+    "message": "Sets should not contain duplicate item `\"for\"`",
+    "row": 72,
+    "column": 9,
+    "end_row": 72,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "SIM212",
+    "message": "Use `title_tokens if title_tokens else [\"product\"]` instead of `[\"product\"] if not title_tokens else title_tokens`",
+    "row": 165,
+    "column": 51,
+    "end_row": 165,
+    "end_column": 100
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PLR0911",
+    "message": "Too many return statements (7 > 6)",
+    "row": 266,
+    "column": 5,
+    "end_row": 266,
+    "end_column": 25
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PLR0913",
+    "message": "Too many arguments in function definition (6 > 5)",
+    "row": 293,
+    "column": 5,
+    "end_row": 293,
+    "end_column": 29
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "C901",
+    "message": "`_layer_l4` is too complex (14 > 10)",
+    "row": 335,
+    "column": 5,
+    "end_row": 335,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PLR0912",
+    "message": "Too many branches (15 > 12)",
+    "row": 335,
+    "column": 5,
+    "end_row": 335,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PLR0915",
+    "message": "Too many statements (56 > 50)",
+    "row": 335,
+    "column": 5,
+    "end_row": 335,
+    "end_column": 14
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "RUF002",
+    "message": "Docstring contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?",
+    "row": 343,
+    "column": 65,
+    "end_row": 343,
+    "end_column": 66
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PERF401",
+    "message": "Use a list comprehension to create a transformed list",
+    "row": 371,
+    "column": 9,
+    "end_row": 371,
+    "end_column": 41
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PERF401",
+    "message": "Use `list.extend` to create a transformed list",
+    "row": 373,
+    "column": 9,
+    "end_row": 373,
+    "end_column": 54
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PERF401",
+    "message": "Use `list.extend` to create a transformed list",
+    "row": 376,
+    "column": 13,
+    "end_row": 376,
+    "end_column": 57
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "RUF059",
+    "message": "Unpacked variable `intents` is never used",
+    "row": 566,
+    "column": 5,
+    "end_row": 566,
+    "end_column": 12
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PLR0913",
+    "message": "Too many arguments in function definition (6 > 5)",
+    "row": 577,
+    "column": 5,
+    "end_row": 577,
+    "end_column": 25
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "TRY300",
+    "message": "Consider moving this statement to an `else` block",
+    "row": 625,
+    "column": 9,
+    "end_row": 625,
+    "end_column": 21
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "PLR0913",
+    "message": "Too many arguments in function definition (7 > 5)",
+    "row": 706,
+    "column": 5,
+    "end_row": 706,
+    "end_column": 29
+  },
+  {
+    "filename": "amazon_copy/ui/audit_pipeline.py",
+    "code": "RUF002",
+    "message": "Docstring contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?",
+    "row": 716,
+    "column": 14,
+    "end_row": 716,
+    "end_column": 15
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 2,
+    "column": 1,
+    "end_row": 18,
+    "end_column": 2
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_valid_candidate`",
+    "row": 22,
+    "column": 9,
+    "end_row": 22,
+    "end_column": 29
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_bad_title_count`",
+    "row": 35,
+    "column": 9,
+    "end_row": 35,
+    "end_column": 29
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_illegal_eligible_with_hard_fails`",
+    "row": 46,
+    "column": 9,
+    "end_row": 46,
+    "end_column": 46
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_eligible_false_with_hard_fail_ok`",
+    "row": 57,
+    "column": 9,
+    "end_row": 57,
+    "end_column": 46
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_critique_finding`",
+    "row": 72,
+    "column": 9,
+    "end_row": 72,
+    "end_column": 30
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_critique_artifact`",
+    "row": 80,
+    "column": 9,
+    "end_row": 80,
+    "end_column": 31
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_happy`",
+    "row": 93,
+    "column": 9,
+    "end_row": 93,
+    "end_column": 19
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_requires_parent_candidate_id`",
+    "row": 104,
+    "column": 9,
+    "end_row": 104,
+    "end_column": 42
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "C420",
+    "message": "Unnecessary dict comprehension for iterable; use `dict.fromkeys` instead",
+    "row": 117,
+    "column": 16,
+    "end_row": 117,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_happy`",
+    "row": 119,
+    "column": 9,
+    "end_row": 119,
+    "end_column": 19
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_ballot_missing_dim_fails`",
+    "row": 125,
+    "column": 9,
+    "end_row": 125,
+    "end_column": 38
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_ballot_extra_dim_fails`",
+    "row": 131,
+    "column": 9,
+    "end_row": 131,
+    "end_column": 36
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_ballot_score_out_of_range_low`",
+    "row": 137,
+    "column": 9,
+    "end_row": 137,
+    "end_column": 43
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_ballot_score_out_of_range_high`",
+    "row": 143,
+    "column": 9,
+    "end_row": 143,
+    "end_column": 44
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_happy`",
+    "row": 151,
+    "column": 9,
+    "end_row": 151,
+    "end_column": 19
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_happy`",
+    "row": 161,
+    "column": 9,
+    "end_row": 161,
+    "end_column": 19
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_fallback_true`",
+    "row": 169,
+    "column": 9,
+    "end_row": 169,
+    "end_column": 27
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_happy`",
+    "row": 179,
+    "column": 9,
+    "end_row": 179,
+    "end_column": 19
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_with_candidate`",
+    "row": 186,
+    "column": 9,
+    "end_row": 186,
+    "end_column": 28
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_with_error`",
+    "row": 197,
+    "column": 9,
+    "end_row": 197,
+    "end_column": 24
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_both_none`",
+    "row": 202,
+    "column": 9,
+    "end_row": 202,
+    "end_column": 23
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_model_dump_serializes`",
+    "row": 209,
+    "column": 9,
+    "end_row": 209,
+    "end_column": 35
+  },
+  {
+    "filename": "tests/test_agent_schemas.py",
+    "code": "C420",
+    "message": "Unnecessary dict comprehension for iterable; use `dict.fromkeys` instead",
+    "row": 232,
+    "column": 18,
+    "end_row": 232,
+    "end_column": 50
+  },
+  {
+    "filename": "tests/test_critique.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 7,
+    "column": 1,
+    "end_row": 20,
+    "end_column": 87
+  },
+  {
+    "filename": "tests/test_documented_commands.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 8,
+    "column": 1,
+    "end_row": 19,
+    "end_column": 36
+  },
+  {
+    "filename": "tests/test_documented_commands.py",
+    "code": "F401",
+    "message": "`pathlib.Path` imported but unused",
+    "row": 22,
+    "column": 25,
+    "end_row": 22,
+    "end_column": 29
+  },
+  {
+    "filename": "tests/test_documented_commands.py",
+    "code": "PLW1510",
+    "message": "`subprocess.run` without explicit `check` argument",
+    "row": 36,
+    "column": 18,
+    "end_row": 36,
+    "end_column": 32
+  },
+  {
+    "filename": "tests/test_documented_commands.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 72,
+    "column": 9,
+    "end_row": 72,
+    "end_column": 64
+  },
+  {
+    "filename": "tests/test_documented_commands.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 79,
+    "column": 9,
+    "end_row": 79,
+    "end_column": 85
+  },
+  {
+    "filename": "tests/test_exporters.py",
+    "code": "F841",
+    "message": "Local variable `marked` is assigned to but never used",
+    "row": 87,
+    "column": 5,
+    "end_row": 87,
+    "end_column": 11
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 2,
+    "column": 1,
+    "end_row": 10,
+    "end_column": 84
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_two_different_orders`",
+    "row": 45,
+    "column": 9,
+    "end_row": 45,
+    "end_column": 34
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_deterministic_same_run_id`",
+    "row": 53,
+    "column": 9,
+    "end_row": 53,
+    "end_column": 39
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_different_run_id_different_orders`",
+    "row": 61,
+    "column": 9,
+    "end_row": 61,
+    "end_column": 47
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_single_element_identity`",
+    "row": 69,
+    "column": 9,
+    "end_row": 69,
+    "end_column": 37
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_empty_list`",
+    "row": 76,
+    "column": 9,
+    "end_row": 76,
+    "end_column": 24
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_bidirectional_mapping`",
+    "row": 87,
+    "column": 9,
+    "end_row": 87,
+    "end_column": 35
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_length_matches`",
+    "row": 95,
+    "column": 9,
+    "end_row": 95,
+    "end_column": 28
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_empty`",
+    "row": 101,
+    "column": 9,
+    "end_row": 101,
+    "end_column": 19
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_alias_numbers_start_at_one`",
+    "row": 105,
+    "column": 9,
+    "end_row": 105,
+    "end_column": 40
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `mock_judge`",
+    "row": 119,
+    "column": 9,
+    "end_row": 119,
+    "end_column": 19
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_returns_valid_ranking_result`",
+    "row": 140,
+    "column": 15,
+    "end_row": 140,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 140,
+    "column": 55,
+    "end_row": 140,
+    "end_column": 65
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_ordered_by_score_descending`",
+    "row": 151,
+    "column": 15,
+    "end_row": 151,
+    "end_column": 47
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 151,
+    "column": 54,
+    "end_row": 151,
+    "end_column": 64
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_stable_winner_same_run_id`",
+    "row": 158,
+    "column": 15,
+    "end_row": 158,
+    "end_column": 45
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 158,
+    "column": 52,
+    "end_row": 158,
+    "end_column": 62
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_different_run_different_winner_possible`",
+    "row": 166,
+    "column": 15,
+    "end_row": 166,
+    "end_column": 59
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 166,
+    "column": 66,
+    "end_row": 166,
+    "end_column": 76
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_empty_candidates_raises`",
+    "row": 178,
+    "column": 15,
+    "end_row": 178,
+    "end_column": 43
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_single_candidate`",
+    "row": 183,
+    "column": 15,
+    "end_row": 183,
+    "end_column": 36
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 183,
+    "column": 43,
+    "end_row": 183,
+    "end_column": 53
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_two_candidates`",
+    "row": 190,
+    "column": 15,
+    "end_row": 190,
+    "end_column": 34
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 190,
+    "column": 41,
+    "end_row": 190,
+    "end_column": 51
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_two_judge_calls_for_two_plus_candidates`",
+    "row": 199,
+    "column": 15,
+    "end_row": 199,
+    "end_column": 59
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 199,
+    "column": 66,
+    "end_row": 199,
+    "end_column": 76
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_zero_judge_calls_for_empty`",
+    "row": 206,
+    "column": 15,
+    "end_row": 206,
+    "end_column": 46
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_tie_break_by_lexicographic_id`",
+    "row": 219,
+    "column": 15,
+    "end_row": 219,
+    "end_column": 49
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 219,
+    "column": 56,
+    "end_row": 219,
+    "end_column": 66
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_score_dims_in_ballot`",
+    "row": 230,
+    "column": 15,
+    "end_row": 230,
+    "end_column": 40
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN001",
+    "message": "Missing type annotation for function argument `mock_judge`",
+    "row": 230,
+    "column": 47,
+    "end_row": 230,
+    "end_column": 57
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_real_fixture_round_trip`",
+    "row": 249,
+    "column": 15,
+    "end_row": 249,
+    "end_column": 43
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_winner_is_first_in_ordered_list`",
+    "row": 259,
+    "column": 15,
+    "end_row": 259,
+    "end_column": 51
+  },
+  {
+    "filename": "tests/test_judging.py",
+    "code": "ANN201",
+    "message": "Missing return type annotation for public function `test_scores_within_range`",
+    "row": 270,
+    "column": 15,
+    "end_row": 270,
+    "end_column": 39
+  },
+  {
+    "filename": "tests/test_listing_audit.py",
+    "code": "RUF002",
+    "message": "Docstring contains ambiguous `–` (EN DASH). Did you mean `-` (HYPHEN-MINUS)?",
+    "row": 1,
+    "column": 35,
+    "end_row": 1,
+    "end_column": 36
+  },
+  {
+    "filename": "tests/test_listing_audit.py",
+    "code": "E501",
+    "message": "Line too long (105 > 100)",
+    "row": 313,
+    "column": 93,
+    "end_row": 313,
+    "end_column": 98
+  },
+  {
+    "filename": "tests/test_mcp_client.py",
+    "code": "SIM300",
+    "message": "Yoda condition detected",
+    "row": 35,
+    "column": 16,
+    "end_row": 35,
+    "end_column": 86
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 11,
+    "column": 1,
+    "end_row": 21,
+    "end_column": 78
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "SIM117",
+    "message": "Use a single `with` statement with multiple contexts instead of nested `with` statements",
+    "row": 207,
+    "column": 5,
+    "end_row": 208,
+    "end_column": 53
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "BLE001",
+    "message": "Do not catch blind exception: `BaseException`",
+    "row": 216,
+    "column": 24,
+    "end_row": 216,
+    "end_column": 37
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 259,
+    "column": 5,
+    "end_row": 259,
+    "end_column": 52
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 268,
+    "column": 5,
+    "end_row": 268,
+    "end_column": 28
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 289,
+    "column": 5,
+    "end_row": 289,
+    "end_column": 28
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 313,
+    "column": 5,
+    "end_row": 314,
+    "end_column": 60
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 313,
+    "column": 5,
+    "end_row": 313,
+    "end_column": 14
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 314,
+    "column": 5,
+    "end_row": 314,
+    "end_column": 60
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "PTH118",
+    "message": "`os.path.join()` should be replaced by `Path` with `/` operator",
+    "row": 317,
+    "column": 16,
+    "end_row": 317,
+    "end_column": 28
+  },
+  {
+    "filename": "tests/test_mcp_fixture_server.py",
+    "code": "PTH113",
+    "message": "`os.path.isfile()` should be replaced by `Path.is_file()`",
+    "row": 318,
+    "column": 16,
+    "end_row": 318,
+    "end_column": 30
+  },
+  {
+    "filename": "tests/test_pipeline_mock.py",
+    "code": "F401",
+    "message": "`amazon_copy.orchestrator._counter.CallLimitError` imported but unused",
+    "row": 12,
+    "column": 47,
+    "end_row": 12,
+    "end_column": 61
+  },
+  {
+    "filename": "tests/test_pipeline_mock.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 95,
+    "column": 5,
+    "end_row": 95,
+    "end_column": 55
+  },
+  {
+    "filename": "tests/test_pipeline_mock.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 99,
+    "column": 9,
+    "end_row": 99,
+    "end_column": 63
+  },
+  {
+    "filename": "tests/test_pipeline_mock.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 100,
+    "column": 9,
+    "end_row": 100,
+    "end_column": 77
+  },
+  {
+    "filename": "tests/test_pipeline_mock.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 188,
+    "column": 5,
+    "end_row": 188,
+    "end_column": 36
+  },
+  {
+    "filename": "tests/test_pipeline_mock.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 190,
+    "column": 9,
+    "end_row": 190,
+    "end_column": 63
+  },
+  {
+    "filename": "tests/test_studio_e2e.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 1,
+    "column": 1,
+    "end_row": 6,
+    "end_column": 40
+  },
+  {
+    "filename": "tests/test_studio_e2e.py",
+    "code": "F401",
+    "message": "`pytest` imported but unused",
+    "row": 3,
+    "column": 8,
+    "end_row": 3,
+    "end_column": 14
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 11,
+    "column": 1,
+    "end_row": 17,
+    "end_column": 90
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "F401",
+    "message": "`amazon_copy.schemas.agents.IntegrationTrace` imported but unused",
+    "row": 17,
+    "column": 59,
+    "end_row": 17,
+    "end_column": 75
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "F401",
+    "message": "`amazon_copy.schemas.agents.RankingResult` imported but unused",
+    "row": 17,
+    "column": 77,
+    "end_row": 17,
+    "end_column": 90
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 101,
+    "column": 9,
+    "end_row": 101,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 141,
+    "column": 9,
+    "end_row": 141,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 153,
+    "column": 9,
+    "end_row": 153,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 164,
+    "column": 9,
+    "end_row": 164,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 181,
+    "column": 9,
+    "end_row": 181,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 191,
+    "column": 9,
+    "end_row": 191,
+    "end_column": 48
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 207,
+    "column": 9,
+    "end_row": 207,
+    "end_column": 68
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "RUF100",
+    "message": "Unused `noqa` directive (unused: `F811`)",
+    "row": 207,
+    "column": 70,
+    "end_row": 207,
+    "end_column": 82
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 213,
+    "column": 9,
+    "end_row": 215,
+    "end_column": 10
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 219,
+    "column": 9,
+    "end_row": 221,
+    "end_column": 61
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 219,
+    "column": 9,
+    "end_row": 219,
+    "end_column": 65
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 220,
+    "column": 9,
+    "end_row": 220,
+    "end_column": 64
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "F811",
+    "message": "Redefinition of unused `IntegrationTrace` from line 17: `IntegrationTrace` redefined here",
+    "row": 220,
+    "column": 48,
+    "end_row": 220,
+    "end_column": 64
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 221,
+    "column": 9,
+    "end_row": 221,
+    "end_column": 61
+  },
+  {
+    "filename": "tests/test_studio_graph.py",
+    "code": "F811",
+    "message": "Redefinition of unused `RankingResult` from line 17: `RankingResult` redefined here",
+    "row": 221,
+    "column": 48,
+    "end_row": 221,
+    "end_column": 61
+  },
+  {
+    "filename": "tests/test_studio_llm.py",
+    "code": "F401",
+    "message": "`typing.Any` imported but unused",
+    "row": 7,
+    "column": 20,
+    "end_row": 7,
+    "end_column": 23
+  },
+  {
+    "filename": "tests/test_studio_llm.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 95,
+    "column": 9,
+    "end_row": 95,
+    "end_column": 71
+  },
+  {
+    "filename": "tests/test_studio_pipeline_adapter.py",
+    "code": "F401",
+    "message": "`amazon_copy.orchestrator.StudioState` imported but unused",
+    "row": 6,
+    "column": 5,
+    "end_row": 6,
+    "end_column": 16
+  },
+  {
+    "filename": "tests/test_studio_pipeline_adapter.py",
+    "code": "F401",
+    "message": "`amazon_copy.schemas.FinalPackage` imported but unused",
+    "row": 10,
+    "column": 33,
+    "end_row": 10,
+    "end_column": 45
+  },
+  {
+    "filename": "tests/test_studio_pipeline_adapter.py",
+    "code": "E501",
+    "message": "Line too long (103 > 100)",
+    "row": 32,
+    "column": 101,
+    "end_row": 32,
+    "end_column": 104
+  },
+  {
+    "filename": "tests/test_studio_pipeline_adapter.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 117,
+    "column": 9,
+    "end_row": 117,
+    "end_column": 53
+  },
+  {
+    "filename": "tests/test_studio_service.py",
+    "code": "I001",
+    "message": "Import block is un-sorted or un-formatted",
+    "row": 11,
+    "column": 1,
+    "end_row": 17,
+    "end_column": 45
+  },
+  {
+    "filename": "tests/test_studio_service.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 80,
+    "column": 9,
+    "end_row": 80,
+    "end_column": 58
+  },
+  {
+    "filename": "tests/test_studio_service.py",
+    "code": "PLC0415",
+    "message": "`import` should be at the top-level of a file",
+    "row": 86,
+    "column": 9,
+    "end_row": 86,
+    "end_column": 68
+  }
+]

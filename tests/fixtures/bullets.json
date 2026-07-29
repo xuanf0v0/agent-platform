@@ -1,0 +1,11 @@
+{
+  "rootwords": ["usb", "hub", "adapter", "hdmi", "macbook", "port", "multiport", "laptop", "apple", "usbc", "card", "mac", "dongle", "pd", "charging", "4k", "sd", "microsd", "chrome", "dell", "ipad"],
+  "keywords": ["usb hub", "usb c hub", "usb-c hub", "multiport adapter", "hdmi hub", "pd charging", "4k hdmi", "macbook hub", "laptop hub", "sd card reader"],
+  "bullets": [
+    {"text": "**USB C Hub** with seven useful connections turns one **USB** **port** into a dependable **multiport adapter** for focused daily work", "text_zh": "七合一 USB-C 扩展坞将单个接口扩展为可靠的多功能连接中心"},
+    {"text": "Send crisp video through the **HDMI hub** with **4K HDMI**, while **PD charging** keeps a compatible **laptop** powered at your desk", "text_zh": "通过 HDMI 输出清晰的 4K 视频，同时为兼容笔记本供电"},
+    {"text": "Move photos using the **SD card reader** and **microsd** slot, then connect **card** storage to a **MacBook hub** for faster creative workflows", "text_zh": "使用 SD 和 microSD 卡槽传输照片，提升创作流程效率"},
+    {"text": "The compact **USB-C hub** is an easy-travel **dongle** for **Apple**, **Mac**, **iPad**, **Dell**, and **Chrome** devices with compatible USBC ports", "text_zh": "紧凑型 USB-C 扩展坞便于携带，兼容多种带 USB-C 接口的设备"},
+    {"text": "Add flexible display, data, and power access with a **USB hub**, **USB-C hub**, **laptop hub**, **adapter**, **HDMI**, and **charging** support", "text_zh": "通过多种接口灵活扩展显示、数据传输和供电能力"}
+  ]
+}

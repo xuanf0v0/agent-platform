@@ -1,0 +1,36 @@
+{
+  "role": "keyword",
+  "claims": [
+    {
+      "key": "top_keyword",
+      "value": "usb c hub",
+      "authority": "amazon_keyword_analytics",
+      "confidence": 0.96
+    },
+    {
+      "key": "search_volume",
+      "value": "245000",
+      "authority": "amazon_keyword_analytics",
+      "confidence": 0.91
+    },
+    {
+      "key": "trending_keyword",
+      "value": "usb c hub for macbook pro",
+      "authority": "amazon_keyword_analytics",
+      "confidence": 0.87
+    },
+    {
+      "key": "long_tail_keyword",
+      "value": "usb c hub with ethernet and sd card",
+      "authority": "amazon_keyword_analytics",
+      "confidence": 0.82
+    },
+    {
+      "key": "competition_level",
+      "value": "high",
+      "authority": "amazon_keyword_analytics",
+      "confidence": 0.79
+    }
+  ],
+  "fixture": true
+}
