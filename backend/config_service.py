@@ -17,7 +17,6 @@ _SECRET_FIELD_PATTERNS: list[str] = [
 
 # Config fields to expose per agent, with display metadata
 _COMMON_CONFIG_FIELDS: list[dict[str, Any]] = [
-    {"key": "MOCK", "label": "Mock Mode", "type": "boolean", "default": "true"},
     {"key": "OPENAI_API_KEY", "label": "API Key", "type": "secret", "default": ""},
     {"key": "OPENAI_API_BASE", "label": "API Base URL", "type": "string", "default": "https://api.deepseek.com"},
     {"key": "WRITER_MODEL", "label": "Writer Model", "type": "string", "default": "deepseek-v4-flash"},
@@ -41,6 +40,12 @@ def _mask_value(value: str) -> str:
     if not value or len(value) <= 8:
         return "****" if value else ""
     return value[:4] + "*" * 8 + value[-4:]
+
+
+def _config_fields(agent_id: str) -> list[dict[str, Any]]:
+    if agent_id == "listing-optimization":
+        return list(_COMMON_CONFIG_FIELDS) + _OPTIMIZATION_EXTRA_FIELDS
+    return list(_COMMON_CONFIG_FIELDS)
 
 
 def _read_env_file(agent_id: str) -> dict[str, str]:
@@ -74,12 +79,16 @@ def _write_env_file(agent_id: str, updates: dict[str, str]) -> None:
         raise ValueError(f"Unknown agent: {agent_id}")
 
     env_path = Path(agent["path"]) / ".env"
-    if not env_path.exists():
-        raise FileNotFoundError(f".env not found at {env_path}")
-
-    # Read existing lines
-    with open(env_path, encoding="utf-8") as f:
-        lines = f.readlines()
+    if env_path.exists():
+        with open(env_path, encoding="utf-8") as f:
+            lines = f.readlines()
+    else:
+        example_path = env_path.with_name(".env.example")
+        if example_path.exists():
+            with open(example_path, encoding="utf-8") as f:
+                lines = f.readlines()
+        else:
+            lines = []
 
     # Update matching keys
     updated_keys: set[str] = set()
@@ -105,6 +114,7 @@ def _write_env_file(agent_id: str, updates: dict[str, str]) -> None:
 
     with open(env_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
+    env_path.chmod(0o600)
 
 
 def get_config(agent_id: str) -> list[dict[str, Any]]:
@@ -116,9 +126,7 @@ def get_config(agent_id: str) -> list[dict[str, Any]]:
     env_values = _read_env_file(agent_id)
 
     # Determine which fields to show
-    fields = list(_COMMON_CONFIG_FIELDS)
-    if agent_id == "listing-optimization":
-        fields = list(_COMMON_CONFIG_FIELDS) + _OPTIMIZATION_EXTRA_FIELDS
+    fields = _config_fields(agent_id)
 
     result: list[dict[str, Any]] = []
     for field in fields:
@@ -141,10 +149,13 @@ def get_config(agent_id: str) -> list[dict[str, Any]]:
 def update_config(agent_id: str, updates: dict[str, str]) -> list[dict[str, Any]]:
     """Update agent configuration. Skip masked (unchanged) secret values."""
     env_values = _read_env_file(agent_id)
+    allowed_keys = {field["key"] for field in _config_fields(agent_id)}
 
     # For secret fields whose value is still masked, keep the original
     cleaned: dict[str, str] = {}
     for key, value in updates.items():
+        if key not in allowed_keys:
+            continue
         if _is_secret_field(key) and ("*" in value or value == "****"):
             # Value wasn't changed — keep original
             if key in env_values:

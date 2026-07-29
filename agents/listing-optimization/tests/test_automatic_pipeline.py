@@ -237,6 +237,70 @@ def test_conservative_mode_auto_removes_every_unverified_question() -> None:
     assert isinstance(result, CompletedOptimization)
     assert result.postflight_review.release_disposition == 'release'
 
+
+def test_conservative_resume_keeps_prior_answers_and_suppresses_removed_terms() -> None:
+    from amazon_copy.automatic_conservative import conservative_resume_context
+
+    events: list[str] = []
+    dependencies = _dependencies(_ResearchFetcher(events), _ScenarioLLM(events))
+    paused = optimizer.run_automatic_optimization(
+        WEDDING_SOURCE,
+        context=optimizer.AutomaticOptimizationContext(
+            marketplace='US',
+            skip_approval=True,
+        ),
+        dependencies=dependencies,
+    )
+    assert isinstance(paused, NeedsClarification)
+    previous_answer = optimizer.ClarificationAnswer(
+        question_code='previous_question',
+        action='remove',
+    )
+    previous = optimizer.AutomaticOptimizationContext(
+        marketplace='US',
+        clarification_answers=(previous_answer,),
+        suppressed_claim_terms=('previous unsupported claim',),
+    )
+
+    resumed = conservative_resume_context(paused, previous)
+
+    answer_codes = {answer.question_code for answer in resumed.clarification_answers}
+    assert 'previous_question' in answer_codes
+    assert {question.code for question in paused.questions} <= answer_codes
+    expected_removed = {
+        term
+        for question in paused.questions
+        if question.fact_key not in {'marketplace', 'product_type'}
+        for term in question.claim_terms
+    }
+    assert {'previous unsupported claim', *expected_removed} <= set(
+        resumed.suppressed_claim_terms
+    )
+
+
+def test_conservative_mode_converges_for_multi_issue_sign_display_stand() -> None:
+    source = """Wedding Welcome Sign Stand 68 x 31 x 20 Inch Adjustable Wedding Sign Holder with 8 Leather and Water Bags Heavy Duty Easel for Poster, Baby Bridal Shower, Bridal Shower, Seating Chart, Gold
+[Product Features Gold Metal Frame]: This display stand is constructed with a metal base and features a shimmering gold-coated finish, providing an elegant visual presentation for various occasions. Its light-reflecting surface and sturdy structure ensure long-term use both indoors and outdoors.
+[Adjustable Height Design]: Users can freely switch between two height options—5.7ft meters and 4ft meters—based on spatial requirements. The simple assembly design supports repeated use and is suitable for year-round display needs for different events.
+[Wind-Resistant Stabilization System]: Equipped with a weighted base measuring 31 x 20 inches and two fillable water bags, this display stand offers reliable stability in both indoor and outdoor environments.
+[Includes Leather Straps in Four Colors]: The sign stand comes with dual-tone leather straps in four color options and anti-rust screws, capable of securely holding signs up to 1 cm thick. It maintains display stability even in breezy conditions.
+[Suitable for Various Display Scenarios]: Ideal for weddings, graduation ceremonies, commercial promotions, and seasonal decorations. It is compatible with acrylic plates, foam boards, and wooden signs, providing a practical and aesthetically pleasing display solution."""
+    events: list[str] = []
+    dependencies = _dependencies(_ResearchFetcher(events), _ScenarioLLM(events))
+
+    result = optimizer.run_automatic_optimization(
+        source,
+        context=optimizer.AutomaticOptimizationContext(
+            marketplace='US',
+            auto_resolve_unverified=True,
+            skip_approval=True,
+        ),
+        dependencies=dependencies,
+    )
+
+    assert isinstance(result, CompletedOptimization)
+    assert result.postflight_review.release_disposition == 'release'
+
 def test_wedding_stand_only_requests_unresolved_accessory_facts() -> None:
     events: list[str] = []
     fetcher = _ResearchFetcher(events)

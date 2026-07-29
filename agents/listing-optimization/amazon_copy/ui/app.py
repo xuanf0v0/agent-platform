@@ -63,44 +63,44 @@ if TYPE_CHECKING:
 _THEME_CSS = """
 <style>
 :root {
-  --lithos-bg: #000000;
-  --lithos-surface: #141414;
-  --lithos-surface-2: #1a1a1a;
-  --lithos-text: #ffffff;
-  --lithos-text-soft: rgba(255, 255, 255, 0.72);
-  --lithos-text-muted: rgba(255, 255, 255, 0.72);
-  --lithos-border: rgba(255, 255, 255, 0.14);
-  --lithos-border-strong: rgba(255, 255, 255, 0.22);
-  --lithos-cta: #e8702a;
-  --lithos-cta-hover: #d2611f;
-  --lithos-cta-active: #c45618;
-  --lithos-cta-text: #000000;
-  --lithos-toolbar-bg: rgba(0, 0, 0, 0.94);
-  --lithos-eyebrow-bg: rgba(255, 255, 255, 0.12);
-  --lithos-eyebrow-border: rgba(255, 255, 255, 0.28);
-  --lithos-eyebrow-text: rgba(255, 255, 255, 0.85);
-  --lithos-label-text: rgba(255, 255, 255, 0.85);
-  --lithos-placeholder-text: rgba(255, 255, 255, 0.62);
-  --lithos-cta-shadow: 0 4px 16px rgba(232, 112, 42, 0.28);
-  --lithos-cta-shadow-hover: 0 6px 20px rgba(232, 112, 42, 0.38);
-  --lithos-disabled-bg: rgba(255, 255, 255, 0.08);
-  --lithos-disabled-text: rgba(255, 255, 255, 0.35);
-  --lithos-secondary-bg: rgba(255, 255, 255, 0.06);
-  --lithos-secondary-text: rgba(255, 255, 255, 0.9);
-  --lithos-secondary-hover-border: rgba(255, 255, 255, 0.4);
-  --lithos-expander-text: rgba(255, 255, 255, 0.92);
+  --lithos-bg: #030711;
+  --lithos-surface: rgba(8, 18, 35, 0.78);
+  --lithos-surface-2: rgba(10, 24, 43, 0.86);
+  --lithos-text: #f4fbff;
+  --lithos-text-soft: rgba(218, 237, 248, 0.68);
+  --lithos-text-muted: rgba(187, 215, 231, 0.52);
+  --lithos-border: rgba(125, 211, 252, 0.13);
+  --lithos-border-strong: rgba(103, 232, 249, 0.3);
+  --lithos-cta: #22d3ee;
+  --lithos-cta-hover: #67e8f9;
+  --lithos-cta-active: #06b6d4;
+  --lithos-cta-text: #03131c;
+  --lithos-toolbar-bg: rgba(3, 7, 17, 0.82);
+  --lithos-eyebrow-bg: rgba(34, 211, 238, 0.08);
+  --lithos-eyebrow-border: rgba(103, 232, 249, 0.24);
+  --lithos-eyebrow-text: rgba(165, 243, 252, 0.88);
+  --lithos-label-text: rgba(218, 237, 248, 0.88);
+  --lithos-placeholder-text: rgba(187, 215, 231, 0.42);
+  --lithos-cta-shadow: 0 8px 26px rgba(34, 211, 238, 0.18);
+  --lithos-cta-shadow-hover: 0 10px 34px rgba(34, 211, 238, 0.28);
+  --lithos-disabled-bg: rgba(125, 211, 252, 0.07);
+  --lithos-disabled-text: rgba(187, 215, 231, 0.32);
+  --lithos-secondary-bg: rgba(125, 211, 252, 0.055);
+  --lithos-secondary-text: rgba(218, 237, 248, 0.9);
+  --lithos-secondary-hover-border: rgba(103, 232, 249, 0.42);
+  --lithos-expander-text: rgba(244, 251, 255, 0.92);
   --lithos-status-gradient: linear-gradient(
     135deg,
-    rgba(232, 112, 42, 0.08),
-    rgba(20, 20, 20, 0.95)
+    rgba(34, 211, 238, 0.09),
+    rgba(8, 18, 35, 0.88)
   );
-  --lithos-success-strong: #22c55e;
-  --lithos-success-subtle: rgba(34, 197, 94, 0.06);
-  --lithos-error-strong: #ef4444;
-  --lithos-error-subtle: rgba(239, 68, 68, 0.06);
-  --lithos-warning-strong: #eab308;
-  --lithos-info-strong: #3b82f6;
-  --lithos-toast-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --lithos-success-strong: #22d3ee;
+  --lithos-success-subtle: rgba(34, 211, 238, 0.07);
+  --lithos-error-strong: #fb7185;
+  --lithos-error-subtle: rgba(251, 113, 133, 0.07);
+  --lithos-warning-strong: #fbbf24;
+  --lithos-info-strong: #38bdf8;
+  --lithos-toast-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
   --lithos-transparent: transparent;
   --lithos-radius: 16px;
   --lithos-radius-lg: 20px;
@@ -141,36 +141,107 @@ _THEME_CSS = """
   --lithos-space-9xl: 2rem;
   --lithos-gap-inline: 0.35rem;
   --lithos-gap-button: 6px;
-  --lithos-glass: rgba(255, 255, 255, 0.045);
-  --lithos-glass-strong: rgba(255, 255, 255, 0.06);
-  --lithos-focus-ring: 0 0 0 1px #e8702a, 0 0 24px rgba(232, 112, 42, 0.18);
+  --lithos-glass: linear-gradient(145deg, rgba(12, 26, 46, 0.8), rgba(5, 13, 27, 0.64));
+  --lithos-glass-strong: rgba(7, 20, 38, 0.82);
+  --lithos-focus-ring: 0 0 0 1px #22d3ee, 0 0 24px rgba(34, 211, 238, 0.18);
   --lithos-font-ui: 'Inter', 'Microsoft YaHei', 'PingFang SC',
     'Noto Sans SC', 'Segoe UI', sans-serif;
-  --lithos-success-bg: rgba(34, 197, 94, 0.12);
-  --lithos-success-border: rgba(34, 197, 94, 0.35);
-  --lithos-error-bg: rgba(239, 68, 68, 0.12);
-  --lithos-error-border: rgba(239, 68, 68, 0.4);
-  --lithos-warning-bg: rgba(234, 179, 8, 0.12);
-  --lithos-warning-border: rgba(234, 179, 8, 0.4);
-  --lithos-info-bg: rgba(59, 130, 246, 0.12);
-  --lithos-info-border: rgba(59, 130, 246, 0.35);
+  --lithos-success-bg: rgba(34, 211, 238, 0.1);
+  --lithos-success-border: rgba(34, 211, 238, 0.3);
+  --lithos-error-bg: rgba(251, 113, 133, 0.1);
+  --lithos-error-border: rgba(251, 113, 133, 0.34);
+  --lithos-warning-bg: rgba(251, 191, 36, 0.1);
+  --lithos-warning-border: rgba(251, 191, 36, 0.34);
+  --lithos-info-bg: rgba(56, 189, 248, 0.1);
+  --lithos-info-border: rgba(56, 189, 248, 0.3);
+  --lithos-canvas-gradient:
+    radial-gradient(circle at 16% 8%, rgba(8, 145, 178, 0.15), transparent 30%),
+    radial-gradient(circle at 86% 82%, rgba(14, 116, 144, 0.11), transparent 34%),
+    linear-gradient(145deg, #07111f 0%, #030711 46%, #07101b 100%);
+  --lithos-grid-gradient:
+    linear-gradient(rgba(125, 211, 252, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.022) 1px, transparent 1px);
+  --lithos-particle-gradient:
+    radial-gradient(circle at 20% 38%, rgba(34, 211, 238, 0.09) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 18%, rgba(165, 243, 252, 0.08) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 72%, rgba(34, 211, 238, 0.07) 0 1px, transparent 2px);
+  --lithos-particle-glow: drop-shadow(0 0 7px rgba(34, 211, 238, 0.5));
+  --lithos-toolbar-border: rgba(125, 211, 252, 0.08);
+  --lithos-panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 24px 70px rgba(0, 0, 0, 0.2);
+  --lithos-panel-shadow-soft: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  --lithos-cta-gradient: linear-gradient(135deg, #22d3ee, #67e8f9);
+  --lithos-cta-gradient-hover: linear-gradient(135deg, #67e8f9, #a5f3fc);
+  --lithos-scrollbar-thumb: rgba(103, 232, 249, 0.24);
+  --lithos-scrollbar-track: rgba(2, 6, 23, 0.3);
 }
 
 /* ---------- Dark canvas (align with config.toml) ---------- */
 html, body, .stApp, [data-testid="stAppViewContainer"] {
-  background-color: var(--lithos-bg);
   color: var(--lithos-text);
   letter-spacing: normal;
   font-family: var(--lithos-font-ui);
 }
+html, body {
+  background: var(--lithos-bg);
+}
+.stApp,
+[data-testid="stAppViewContainer"] {
+  background: var(--lithos-canvas-gradient);
+}
+[data-testid="stAppViewContainer"] {
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: hidden auto;
+  position: relative;
+}
+[data-testid="stAppViewContainer"]::before {
+  animation: lithos-grid-drift 24s linear infinite;
+  background-image: var(--lithos-grid-gradient);
+  background-size: 56px 56px;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+}
+[data-testid="stAppViewContainer"]::after {
+  animation: lithos-ambient-pulse 12s ease-in-out infinite alternate;
+  background: var(--lithos-particle-gradient);
+  background-size: 180px 180px, 240px 240px, 210px 210px;
+  content: "";
+  filter: var(--lithos-particle-glow);
+  inset: 0;
+  opacity: 0.72;
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+}
+@keyframes lithos-grid-drift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 56px 56px, 56px 56px; }
+}
+@keyframes lithos-ambient-pulse {
+  from { opacity: 0.45; transform: scale(1); }
+  to { opacity: 0.82; transform: scale(1.025); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-testid="stAppViewContainer"]::before,
+  [data-testid="stAppViewContainer"]::after {
+    animation: none;
+  }
+}
 [data-testid="stHeader"], [data-testid="stToolbar"] {
   background: var(--lithos-toolbar-bg);
-  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--lithos-toolbar-border);
+  backdrop-filter: blur(18px);
 }
 [data-testid="stMainBlockContainer"] {
   padding-top: var(--lithos-space-main-top);
   padding-bottom: var(--lithos-space-main-bottom);
   max-width: 110rem;
+  position: relative;
+  z-index: 1;
 }
 [data-testid="stBottomBlockContainer"] {
   width: min(58rem, calc(100% - 2rem)) !important;
@@ -312,6 +383,9 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   background: var(--lithos-glass);
   border: 1px solid var(--lithos-border);
   border-radius: var(--lithos-radius-lg);
+  box-shadow: var(--lithos-panel-shadow);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
   padding: var(--lithos-space-5xl) var(--lithos-space-5xl) var(--lithos-space-7xl);
   margin-bottom: var(--lithos-space-3xl);
 }
@@ -376,10 +450,10 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 
 /* ========== BUTTON SYSTEM ========== */
 
-/* Primary CTA — orange pill (readable on black) */
+/* Primary CTA */
 [data-testid="stFormSubmitButton"] button,
 button[kind="primary"] {
-  background: var(--lithos-cta) !important;
+  background: var(--lithos-cta-gradient) !important;
   color: var(--lithos-cta-text) !important;
   border: 1px solid var(--lithos-transparent) !important;
   border-radius: var(--lithos-radius-pill) !important;
@@ -398,7 +472,7 @@ button[kind="primary"] {
 }
 [data-testid="stFormSubmitButton"] button:hover,
 button[kind="primary"]:hover {
-  background: var(--lithos-cta-hover) !important;
+  background: var(--lithos-cta-gradient-hover) !important;
   box-shadow: var(--lithos-cta-shadow-hover) !important;
   transform: none !important;
 }
@@ -481,6 +555,9 @@ h2.lithos-section-label {
   background: var(--lithos-glass);
   border: 1px solid var(--lithos-border);
   border-radius: var(--lithos-radius);
+  box-shadow: var(--lithos-panel-shadow-soft);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   overflow: hidden;
   margin-bottom: var(--lithos-space-md);
 }
@@ -567,6 +644,23 @@ hr {
   border-radius: var(--lithos-radius) !important;
   color: var(--lithos-text) !important;
   box-shadow: var(--lithos-toast-shadow) !important;
+  backdrop-filter: blur(18px);
+}
+
+* {
+  scrollbar-color: var(--lithos-scrollbar-thumb) var(--lithos-scrollbar-track);
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--lithos-scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--lithos-scrollbar-thumb);
+  border-radius: var(--lithos-radius-pill);
 }
 </style>
 """

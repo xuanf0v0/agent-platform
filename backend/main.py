@@ -148,20 +148,16 @@ async def api_get_logs(agent_id: str, lines: int = 200) -> dict[str, Any]:
 
 @app.websocket("/ws/agents/{agent_id}/logs")
 async def ws_agent_logs(websocket: WebSocket, agent_id: str) -> None:
-    await websocket.accept()
-
-    # Send existing logs first
-    existing = process_manager.get_logs(agent_id, tail=100)
-    for line in existing:
-        await websocket.send_text(line)
-
-    # Subscribe to new logs
     queue: asyncio.Queue = process_manager.subscribe_logs(agent_id)
     try:
+        await websocket.accept()
+        existing = process_manager.get_logs(agent_id, tail=100)
+        for line in existing:
+            await websocket.send_text(line)
         while True:
             line = await queue.get()
             await websocket.send_text(line)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError, OSError):
         pass
     finally:
         process_manager.unsubscribe_logs(agent_id, queue)

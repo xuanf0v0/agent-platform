@@ -47,6 +47,18 @@ def conservative_resume_context(
         )
         for question in result.questions
     )
+    merged_answers_by_code = {
+        answer.question_code: answer for answer in previous.clarification_answers
+    }
+    merged_answers_by_code.update(
+        {answer.question_code: answer for answer in answers}
+    )
+    removed_question_terms = tuple(
+        term
+        for question, answer in zip(result.questions, answers, strict=True)
+        if answer.action == "remove"
+        for term in question.claim_terms
+    )
     evidence = result.evidence_bundle
     postflight_unauthorized_terms = (
         ()
@@ -66,6 +78,7 @@ def conservative_resume_context(
                 *previous.suppressed_claim_terms,
                 *evidence.suppressed_claim_terms,
                 *postflight_unauthorized_terms,
+                *removed_question_terms,
             )
         )
     )
@@ -75,7 +88,7 @@ def conservative_resume_context(
             "user_claims": evidence.user_claims,
             "suppressed_claim_terms": merged_suppressed,
             "allowed_keywords": evidence.allowed_keywords,
-            "clarification_answers": answers,
+            "clarification_answers": tuple(merged_answers_by_code.values()),
             "clarification_reply": None,
             "clarification_questions": result.questions,
             "cached_research": result.research_cache,

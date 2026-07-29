@@ -25,12 +25,12 @@ pip install -e ".[dev]"
 streamlit run amazon_create/ui/app.py
 ```
 
-默认 `MOCK=true` 可离线演示。真实 LLM 时配置 `.env`（见 `.env.example`）。
+启动前请配置 `.env`（见 `.env.example`）中的真实模型 API Key。
 
 ## CLI
 
 ```bash
-amz-create fast --product "Hardware Cloth" --market US --specs "..." --mock
+amz-create fast --product "Hardware Cloth" --market US --specs "..." --live
 ```
 
 ## Resources

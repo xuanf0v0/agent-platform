@@ -26,14 +26,13 @@ class CreationTurnRequest(BaseModel):
 
     message: str = Field(min_length=1)
     session: CreationSession | None = None
-    mock: bool = True
 
 
 def creation_payload(payload: dict[str, Any]) -> CreationSession:
     """Validate and execute one creation-agent turn."""
     request = CreationTurnRequest.model_validate(payload)
     session = request.session or new_session()
-    return apply_user_message(session, request.message, settings=Settings(mock=request.mock))
+    return apply_user_message(session, request.message, settings=Settings(MOCK=False))
 
 
 class ApiHandler(BaseHTTPRequestHandler):

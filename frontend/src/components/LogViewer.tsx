@@ -13,7 +13,11 @@ export default function LogViewer({ agentId, isRunning }: Props) {
 
   useEffect(() => {
     if (isRunning) {
-      connect();
+      const connectionTimer = window.setTimeout(connect, 50);
+      return () => {
+        window.clearTimeout(connectionTimer);
+        disconnect();
+      };
     } else {
       disconnect();
     }

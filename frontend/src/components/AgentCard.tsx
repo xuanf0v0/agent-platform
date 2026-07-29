@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { AgentInfo, StartStopResponse } from '../types';
 import StatusBadge from './StatusBadge';
 import AgentDetail from './AgentDetail';
@@ -11,15 +11,19 @@ interface Props {
 export default function AgentCard({ agent, onToggle }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const togglePending = useRef(false);
 
   const isRunning = agent.status === 'running';
   const isStarting = agent.status === 'starting';
 
   const handleToggle = async () => {
+    if (togglePending.current) return;
+    togglePending.current = true;
     setBusy(true);
     try {
       await onToggle(agent.id);
     } finally {
+      togglePending.current = false;
       setBusy(false);
     }
   };
