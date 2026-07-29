@@ -43,68 +43,54 @@ export default function AgentCard({ agent, onToggle }: Props) {
   };
 
   return (
-    <div className="card" style={{ marginBottom: '1rem' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
-          <span style={{ fontSize: '2rem', lineHeight: 1 }}>{agent.icon}</span>
+    <article className={`card agent-card ${isRunning ? 'agent-card-running' : ''}`}>
+      <div className="agent-card-glow" />
+      <div className="agent-card-header">
+        <div className="agent-identity">
+          <span className="agent-icon">{agent.icon}</span>
           <div>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>
-              {agent.name_zh}
-            </h3>
-            <p style={{ color: 'var(--lithos-text-soft)', fontSize: '0.8125rem', margin: '4px 0 0' }}>
-              {agent.description}
-            </p>
+            <span className="agent-type">AI SERVICE · {agent.id.toUpperCase()}</span>
+            <h3>{agent.name_zh}</h3>
           </div>
         </div>
         <StatusBadge status={agent.status} />
       </div>
 
-      {/* Info Row */}
-      <div style={{
-        display: 'flex', gap: '2rem', marginTop: '0.75rem',
-        color: 'var(--lithos-text-soft)', fontSize: '0.8125rem',
-      }}>
-        {isRunning && agent.port && (
-          <span>端口: <code style={{ color: 'var(--lithos-text)', background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: 4 }}>{agent.port}</code></span>
-        )}
-        {isRunning && uptime > 0 && (
-          <span>运行时长: {formatUptime(uptime)}</span>
-        )}
-        {isRunning && agent.pid > 0 && (
-          <span>PID: {agent.pid}</span>
-        )}
+      <p className="agent-description">{agent.description}</p>
+
+      <div className="agent-stats">
+        <div><span>PORT</span><strong>{agent.port || '—'}</strong></div>
+        <div><span>UPTIME</span><strong>{isRunning && uptime > 0 ? formatUptime(uptime) : '—'}</strong></div>
+        <div><span>PROCESS</span><strong>{isRunning && agent.pid > 0 ? agent.pid : 'OFFLINE'}</strong></div>
         {agent.status === 'error' && agent.error_message && (
-          <span style={{ color: 'var(--lithos-error)' }}>{agent.error_message}</span>
+          <span className="agent-error">{agent.error_message}</span>
         )}
       </div>
 
-      {/* Actions */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+      <div className="agent-actions">
         <button
           className={isRunning ? 'btn-danger' : 'btn-primary'}
           onClick={handleToggle}
           disabled={busy || isStarting}
         >
-          {isStarting ? '⏳ 启动中...' : isRunning ? '⏹ 停止' : '▶ 启动'}
+          {isStarting ? '启动中...' : isRunning ? '停止服务' : '启动服务'}
         </button>
         {isRunning && (
           <button className="btn-secondary" onClick={handleOpen}>
-            🔗 打开
+            打开工作台 ↗
           </button>
         )}
         <button
           className="btn-ghost"
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? '收起 ▲' : '详情 ▼'}
+          {expanded ? '收起详情 ↑' : '配置与日志 ↓'}
         </button>
       </div>
 
-      {/* Expanded Detail */}
       {expanded && (
         <AgentDetail agentId={agent.id} isRunning={isRunning} />
       )}
-    </div>
+    </article>
   );
 }

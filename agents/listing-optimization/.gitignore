@@ -30,6 +30,14 @@ htmlcov/
 playwright-report/
 test-results/
 
+# Node / React
+node_modules/
+web/dist/
+amazon_copy/web_dist/
+amazon_create/web_dist/
+web/creation/node_modules/
+*.tsbuildinfo
+
 # Local agent, QA, and scratch artifacts
 .omo/
 .reasonix/
@@ -47,11 +55,6 @@ test-results/
 # Runtime outputs
 outputs/
 *.log
-
-# React production assets
-web/node_modules/
-amazon_copy/web_dist/
-*.tsbuildinfo
 
 # Local Streamlit secrets
 .streamlit/secrets.toml

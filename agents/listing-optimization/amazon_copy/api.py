@@ -1,4 +1,4 @@
-"""JSON API and packaged React host for Listing Optimization."""
+"""Minimal JSON API for the React listing workbench."""
 
 from __future__ import annotations
 
@@ -16,15 +16,19 @@ from amazon_copy.automatic_models import (
     AutomaticOptimizationContext,
     AutomaticOptimizationResult,
 )
-from amazon_copy.automatic_research import secure_research_cache
+from amazon_copy.copy_workflow import (
+    CopyWorkflow,
+    CopyWorkflowState,
+    next_step,
+    required_inputs,
+    route_for,
+)
 from amazon_copy.input_security import InputSecurityError, require_listing_input
 from amazon_copy.simple_optimizer import run_automatic_optimization
 
-_WEB_ROOT = Path(__file__).with_name("web_dist")
-
 
 class OptimizeRequest(BaseModel):
-    """One React workbench request for a new or resumed optimization run."""
+    """Browser request for a new or resumed optimization run."""
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
@@ -32,54 +36,106 @@ class OptimizeRequest(BaseModel):
     context: AutomaticOptimizationContext = Field(default_factory=AutomaticOptimizationContext)
 
 
+class CopyWorkflowRequest(BaseModel):
+    """One serializable turn in the guided copywriting agent."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
+    state: CopyWorkflowState
+    values: dict[str, str] = Field(default_factory=dict)
+    approved: bool | None = None
+
+
+_WEB_ROOT = Path(__file__).with_name("web_dist")
+
+
+def workflow_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate and advance a guided workflow by exactly one step."""
+    request = CopyWorkflowRequest.model_validate(payload)
+    missing = [
+        name
+        for name in required_inputs(request.state)
+        if not request.values.get(name, "").strip()
+    ]
+    if missing:
+        message = f"missing required inputs: {', '.join(missing)}"
+        raise ValueError(message)
+    advanced = next_step(request.state, approved=request.approved)
+    return _workflow_view(advanced)
+
+
+def _workflow_view(state: CopyWorkflowState) -> dict[str, Any]:
+    return {
+        "state": state.model_dump(mode="json"),
+        "route": [step.value for step in route_for(state.workflow)],
+        "required_inputs": list(required_inputs(state)),
+        "completed": state.step.value == "completed",
+    }
+
+
+def agents_payload() -> dict[str, Any]:
+    """Describe all agents exposed by the management console."""
+    return {
+        "agents": [
+            {
+                "id": "safe-optimizer",
+                "name": "Listing 安全优化 Agent",
+                "description": "诊断现有 Listing、经确认后生成通过发布门禁的优化稿",
+                "endpoint": "/api/optimize",
+            },
+            {
+                "id": "copy-studio",
+                "name": "Listing 创作 Agent",
+                "description": "按撰写、五行优化、SEO 分析和文案分析四种流程逐步执行",
+                "endpoint": "/api/copy-workflow",
+                "workflows": [item.value for item in CopyWorkflow],
+            },
+        ]
+    }
+
+
 def optimize_payload(payload: dict[str, Any]) -> AutomaticOptimizationResult:
-    """Validate one request and execute the existing optimization control plane."""
+    """Validate one API payload and execute the existing automatic pipeline."""
     request = OptimizeRequest.model_validate(payload)
     require_listing_input(request.source_text)
-    result = run_automatic_optimization(request.source_text, context=request.context)
-    return _secure_result_cache(result)
-
-
-def _secure_result_cache(result: AutomaticOptimizationResult) -> AutomaticOptimizationResult:
-    """Keep browser-visible research cache redacted as in the former UI."""
-    if result.research_cache is None:
-        return result
-    research_cache = secure_research_cache(result.research_cache)
-    updates: dict[str, object] = {"research_cache": research_cache}
-    if result.evidence_bundle is not None:
-        updates["evidence_bundle"] = result.evidence_bundle.model_copy(
-            update={"research": research_cache.bundle}
-        )
-    return result.model_copy(update=updates)
+    return run_automatic_optimization(request.source_text, context=request.context)
 
 
 class ApiHandler(BaseHTTPRequestHandler):
-    """Serve the optimization API and built React application."""
+    """Serve health and optimization endpoints without a web-framework dependency."""
 
-    server_version = "AmazonCopyAPI/2.0"
+    server_version = "AmazonCopyAPI/1.0"
 
     def do_OPTIONS(self) -> None:
-        """Answer local-development browser CORS preflight requests."""
+        """Answer browser CORS preflight requests."""
         self.send_response(HTTPStatus.NO_CONTENT)
         self._cors_headers()
         self.end_headers()
 
     def do_GET(self) -> None:
-        """Return health metadata or the production React application."""
+        """Return API metadata or the packaged React application."""
         if self.path == "/api/health":
-            self._json_response(HTTPStatus.OK, {"status": "ok", "agent": "listing-optimization"})
+            self._json_response(HTTPStatus.OK, {"status": "ok"})
+            return
+        if self.path == "/api/agents":
+            self._json_response(HTTPStatus.OK, agents_payload())
             return
         self._static_response()
 
     def do_POST(self) -> None:
-        """Run a validated optimization request."""
-        if self.path != "/api/optimize":
+        """Run one validated optimization request."""
+        if self.path not in {"/api/optimize", "/api/copy-workflow"}:
             self._json_response(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
-            payload = _object_payload(json.loads(self.rfile.read(content_length)))
-            result = optimize_payload(payload)
+            raw = self.rfile.read(content_length)
+            payload = _object_payload(json.loads(raw))
+            result: Any = (
+                optimize_payload(payload)
+                if self.path == "/api/optimize"
+                else workflow_payload(payload)
+            )
         except (
             ValidationError,
             InputSecurityError,
@@ -98,10 +154,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                 {"error": "optimization_failed", "message": "优化服务暂时不可用"},
             )
             return
-        self._json_response(HTTPStatus.OK, result.model_dump(mode="json"))
+        body = result.model_dump(mode="json") if isinstance(result, BaseModel) else result
+        self._json_response(HTTPStatus.OK, body)
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-        """Write concise API access logs."""
+        """Write one concise access-log line."""
         typer.echo(f"API {self.address_string()} {format % args}")
 
     def _json_response(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
@@ -147,11 +204,11 @@ def _object_payload(payload: object) -> dict[str, Any]:
 
 def serve(
     host: str = typer.Option("127.0.0.1", help="API bind address."),
-    port: int = typer.Option(8502, min=1, max=65535, help="API port."),
+    port: int = typer.Option(8000, min=1, max=65535, help="API port."),
 ) -> None:
-    """Run the React Listing Optimization workbench."""
+    """Run the React workbench API."""
     server = ThreadingHTTPServer((host, port), ApiHandler)
-    typer.echo(f"Listing Optimization listening on http://{host}:{port}")
+    typer.echo(f"Amazon Copy Console listening on http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

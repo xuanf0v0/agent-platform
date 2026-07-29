@@ -187,36 +187,6 @@ def test_source_highlights_over_length_is_clamped() -> None:
     assert repaired.bullets == source.bullets
 
 
-def test_source_rewrite_removes_conservatively_suppressed_specialized_facts() -> None:
-    source = SourceListingCopy(
-        title="Adjustable Wedding Sign Stand 68 x 31 x 20 Inch",
-        item_highlights="Includes two fillable water bags",
-        bullets=[
-            "Two height options: 5.7ft meters and 4ft meters",
-            "Weighted base measuring 31 x 20 inches",
-            "Securely holds signs up to 1 cm thick",
-        ],
-    )
-    evidence = EvidenceBundle(
-        suppressed_claim_terms=(
-            "5.7ft meters and 4ft meters",
-            "31 x 20 inches",
-            "1 cm thick",
-            "two fillable water bags",
-        )
-    )
-
-    repaired = safely_rewrite_source(source, report(), evidence)
-
-    visible = " ".join(
-        (repaired.title, repaired.item_highlights, *repaired.bullets)
-    ).casefold()
-    assert "5.7ft meters and 4ft meters" not in visible
-    assert "31 x 20 inches" not in visible
-    assert "1 cm thick" not in visible
-    assert "two fillable water bags" not in visible
-
-
 def test_source_title_and_highlights_both_clamped() -> None:
     # Given: both title and IH exceed their paste-ready limits.
     source = SourceListingCopy(

@@ -156,6 +156,14 @@ class TestValidateBulletsTrailingPeriodAndLength:
         assert result.errors == []
         assert result.hits == []
 
+    def test_rejects_more_than_five_bullets(self) -> None:
+        result = validate_bullets([_bp_of_len(120) for _ in range(6)], "write")
+        assert any("count 6" in error and "maximum 5" in error for error in result.errors)
+
+    def test_warns_when_five_bullet_total_exceeds_1000(self) -> None:
+        result = validate_bullets([_bp_of_len(201) for _ in range(5)], "optimize")
+        assert any("total plain_len 1005" in warning for warning in result.warnings)
+
 
 class TestComplianceHitShape:
     def test_hit_has_required_fields(self) -> None:

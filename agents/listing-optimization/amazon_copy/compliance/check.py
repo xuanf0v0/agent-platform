@@ -28,6 +28,8 @@ from amazon_copy.schemas.metrics import (
 _WORDLIST_PATH: Final[Path] = Path(__file__).resolve().parent / "wordlist.txt"
 _MIN_COLUMNS: Final[int] = 3
 _TITLE_MIN_PLAIN: Final[int] = 10
+_MAX_BULLET_COUNT: Final[int] = 5
+_RECOMMENDED_BULLET_TOTAL_MAX: Final[int] = 1000
 _MIN_ALL_CAPS_WORDS: Final[int] = 4
 _MIN_CASED_WORD_LENGTH: Final[int] = 2
 _ALL_CAPS_RATIO: Final[float] = 0.8
@@ -329,6 +331,18 @@ def validate_bullets(
     errors: list[str] = []
     warnings: list[str] = []
     all_hits: list[ComplianceHit] = []
+
+    if len(bullets) > _MAX_BULLET_COUNT:
+        errors.append(
+            f"bullet count {len(bullets)} exceeds Amazon maximum {_MAX_BULLET_COUNT}",
+        )
+
+    total_plain_len = sum(plain_len(_bullet_text(item)) for item in bullets)
+    if len(bullets) == _MAX_BULLET_COUNT and total_plain_len > _RECOMMENDED_BULLET_TOTAL_MAX:
+        warnings.append(
+            "five-bullet total plain_len "
+            f"{total_plain_len} exceeds recommended {_RECOMMENDED_BULLET_TOTAL_MAX}",
+        )
 
     for index, item in enumerate(bullets):
         text = _bullet_text(item)

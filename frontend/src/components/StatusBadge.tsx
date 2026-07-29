@@ -7,8 +7,8 @@ interface Props {
 
 const statusStyles: Record<AgentInfo['status'], { bg: string; dot: string; label: string }> = {
   running: {
-    bg: 'rgba(34, 197, 94, 0.12)',
-    dot: '#22C55E',
+    bg: 'rgba(34, 211, 238, 0.1)',
+    dot: '#22d3ee',
     label: '运行中',
   },
   starting: {
@@ -32,11 +32,11 @@ export default function StatusBadge({ status, className = '' }: Props) {
   const s = statusStyles[status];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${className}`}
+      className={`status-badge ${className}`}
       style={{ background: s.bg, color: s.dot }}
     >
       <span
-        className="inline-block w-2 h-2 rounded-full"
+        className="status-dot"
         style={{
           background: s.dot,
           animation: status === 'running' ? 'pulse 2s infinite' : status === 'starting' ? 'pulse 1s infinite' : 'none',

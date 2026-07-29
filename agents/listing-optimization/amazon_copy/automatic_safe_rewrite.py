@@ -165,11 +165,7 @@ def safely_rewrite_source(
         source.title,
         source.item_highlights,
         list(source.bullets),
-        tuple(
-            dict.fromkeys(
-                (*_source_removable_terms(report), *evidence.suppressed_claim_terms)
-            )
-        ),
+        _source_removable_terms(report),
     )
 
     accessories = _confirmed_accessories(evidence)

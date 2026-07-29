@@ -1,12 +1,13 @@
 {
-  "name": "listing-optimization-web",
+  "name": "amazon-copy-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "npm run build && cd .. && uv run amz-copy-api"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
