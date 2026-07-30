@@ -72,6 +72,13 @@ class ConversationService:
             return snapshot
         return self._invoke(thread_id, {"type": "message", "text": text})
 
+    def enqueue_message(self, thread_id: str, text: str) -> ConversationSnapshot:
+        """Persist a user message immediately, before slow Agent processing."""
+        snapshot = self.snapshot(thread_id)
+        if snapshot.state.is_legacy:
+            return snapshot
+        return self._invoke(thread_id, {"type": "enqueue_message", "text": text})
+
     def stream_message(
         self,
         thread_id: str,
@@ -143,6 +150,58 @@ class ConversationService:
             if kind == "error":
                 raise payload
 
+            snapshot = payload
+            new_messages = snapshot.state.messages[len(before.state.messages) :]
+            reply = "\n\n".join(
+                message.content for message in new_messages if message.role == "assistant"
+            )
+            size = max(1, chunk_chars)
+            for index in range(0, len(reply), size):
+                yield ConversationStreamEvent("text", reply[index : index + size])
+            yield ConversationStreamEvent("done")
+            return
+
+    def stream_pending_turn(
+        self,
+        thread_id: str,
+        *,
+        chunk_chars: int = 48,
+        status_interval_seconds: float = 0.35,
+    ) -> Iterator[ConversationStreamEvent]:
+        """Process an already-visible user bubble and stream the assistant reply."""
+        before = self.snapshot(thread_id)
+        if not before.state.pending_user_message:
+            raise ValueError("no pending user message")
+        events: Queue[tuple[str, Any]] = Queue()
+
+        def run() -> None:
+            try:
+                snapshot = self._invoke(thread_id, {"type": "process_pending_message"})
+            except Exception as exc:  # noqa: BLE001
+                events.put(("error", exc))
+            else:
+                events.put(("complete", snapshot))
+
+        worker = Thread(target=run, name=f"creation-pending-{thread_id[:8]}", daemon=True)
+        yield ConversationStreamEvent("status", "已收到消息，正在读取并核对已确认事实")
+        worker.start()
+        status_index = 0
+        running_statuses = (
+            "正在提取产品事实与识别待确认信息",
+            "正在按规则执行当前工作流阶段",
+            "正在进行受控研究与生成可验证结论",
+            "正在整理本轮回复，请稍候",
+        )
+
+        while worker.is_alive() or not events.empty():
+            try:
+                kind, payload = events.get(timeout=status_interval_seconds)
+            except Empty:
+                yield ConversationStreamEvent("status", running_statuses[status_index])
+                status_index = (status_index + 1) % len(running_statuses)
+                continue
+            if kind == "error":
+                raise payload
             snapshot = payload
             new_messages = snapshot.state.messages[len(before.state.messages) :]
             reply = "\n\n".join(

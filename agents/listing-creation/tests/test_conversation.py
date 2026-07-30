@@ -683,6 +683,39 @@ def test_stream_turn_emits_progress_before_complete_reply(tmp_path: Path) -> Non
     assert persisted.state.messages[-1].status == "complete"
 
 
+def test_enqueued_user_message_is_visible_before_agent_processing(tmp_path: Path) -> None:
+    service = _service(tmp_path / "queued-message.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    before_count = len(snapshot.state.messages)
+
+    queued = service.enqueue_message(thread_id, "无论内容是什么，都先显示用户气泡")
+
+    assert queued.state.pending_user_message == "无论内容是什么，都先显示用户气泡"
+    assert len(queued.state.messages) == before_count + 1
+    assert queued.state.messages[-1].role == "user"
+    assert queued.state.messages[-1].content == "无论内容是什么，都先显示用户气泡"
+
+
+def test_pending_user_message_streams_reply_without_duplicate_user_bubble(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path / "pending-stream.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    service.enqueue_message(thread_id, "产品：Wall File Organizer\n站点：US")
+
+    events = list(service.stream_pending_turn(thread_id, chunk_chars=17))
+    completed = service.snapshot(thread_id)
+    user_messages = [item for item in completed.state.messages if item.role == "user"]
+
+    assert events[0].kind == "status"
+    assert any(event.kind == "text" for event in events)
+    assert events[-1].kind == "done"
+    assert completed.state.pending_user_message == ""
+    assert len(user_messages) == 1
+
+
 def test_legacy_conversation_is_read_only(tmp_path: Path) -> None:
     service = _service(tmp_path / "legacy.sqlite3")
     legacy = initial_graph_state("legacy-thread")

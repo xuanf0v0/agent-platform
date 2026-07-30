@@ -175,6 +175,7 @@ class ConversationGraphState(BaseModel):
         "legacy_readonly",
     ] = "intake"
     messages: list[ConversationMessage] = Field(default_factory=list)
+    pending_user_message: str = ""
     candidates: list[FactCandidate] = Field(default_factory=list)
     source_material: str = ""
     current_candidate_id: str = ""

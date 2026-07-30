@@ -120,6 +120,7 @@ class ProcessManager:
 
             info.pid = info.process.pid or 0
             info.started_at = time.time()
+            await self._wait_until_listening(info)
             info.status = AgentStatus.RUNNING
 
             # Start log reader task
@@ -128,8 +129,29 @@ class ProcessManager:
         except Exception as exc:
             info.status = AgentStatus.ERROR
             info.error_message = str(exc)
+            if info.process is not None and info.process.returncode is None:
+                await self._terminate_tracked_process(info.process)
+            info.process = None
+            info.pid = 0
+            info.started_at = 0
 
         return info
+
+    async def _wait_until_listening(self, info: ProcessInfo) -> None:
+        """Do not report RUNNING before the Agent API accepts connections."""
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            if info.process is not None and info.process.returncode is not None:
+                raise RuntimeError(f"agent process exited with code {info.process.returncode}")
+            try:
+                _reader, writer = await asyncio.open_connection("127.0.0.1", info.port)
+            except OSError:
+                await asyncio.sleep(0.15)
+                continue
+            writer.close()
+            await writer.wait_closed()
+            return
+        raise RuntimeError(f"agent API did not become ready on port {info.port}")
 
     def _reconcile_listener_status(self, info: ProcessInfo) -> None:
         """Recover lifecycle state after the manager process restarts."""

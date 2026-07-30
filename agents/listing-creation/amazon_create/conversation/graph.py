@@ -126,6 +126,10 @@ def build_conversation_graph(settings: Settings, checkpointer: Any) -> Any:
             )
         elif action_type == "message":
             _handle_message(state, str(action.get("text") or ""), settings)
+        elif action_type == "enqueue_message":
+            _enqueue_user_message(state, str(action.get("text") or ""))
+        elif action_type == "process_pending_message":
+            _process_pending_message(state, settings)
         elif action_type == "revise_fact":
             _revise_fact(
                 state,
@@ -165,6 +169,8 @@ def _handle_message(
     state: ConversationGraphState,
     text: str,
     settings: Settings,
+    *,
+    append_user: bool = True,
 ) -> None:
     clean = text.strip()
     if not clean:
@@ -177,7 +183,8 @@ def _handle_message(
 
     intent = classify_intent(clean)
     state.last_intent = intent
-    _append_user(state, clean)
+    if append_user:
+        _append_user(state, clean)
 
     if state.phase in {"intake", "facts", "fact_summary"}:
         _handle_intake_turn(state, clean, intent, settings)
@@ -189,6 +196,36 @@ def _handle_message(
             _append_assistant(state, "当前流程已完成。若需修改产品事实，请直接说明字段和正确值。")
         return
     _handle_workflow_turn(state, clean, intent, settings)
+
+
+def _enqueue_user_message(state: ConversationGraphState, text: str) -> None:
+    """Persist the user bubble before any slow model or MCP work starts."""
+    clean = text.strip()
+    if not clean:
+        state.error = "empty_message"
+        return
+    if state.pending_user_message:
+        state.error = "message_already_pending"
+        return
+    if state.is_legacy or state.phase == "legacy_readonly":
+        state.phase = "legacy_readonly"
+        state.error = "legacy_readonly"
+        return
+    _append_user(state, clean)
+    state.pending_user_message = clean
+
+
+def _process_pending_message(
+    state: ConversationGraphState,
+    settings: Settings,
+) -> None:
+    """Process one previously persisted user message without adding it twice."""
+    pending = state.pending_user_message.strip()
+    if not pending:
+        state.error = "no_pending_message"
+        return
+    _handle_message(state, pending, settings, append_user=False)
+    state.pending_user_message = ""
 
 
 def _handle_intake_turn(

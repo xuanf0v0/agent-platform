@@ -347,12 +347,7 @@ def main() -> None:
     _render_workflow_actions(service, snapshot)
     _render_stage_output(snapshot)
 
-    placeholder = "粘贴完整资料，或回复确认、修改意见和补充信息"
-    prompt = st.chat_input(placeholder, max_chars=64000, disabled=state.is_legacy)
-    if prompt:
-        with st.chat_message("user"):
-            st.markdown(prompt)
-            st.caption("已发送")
+    if state.pending_user_message:
         try:
             with st.chat_message("assistant"):
                 progress = st.empty()
@@ -363,7 +358,7 @@ def main() -> None:
                 )
                 response = st.empty()
                 rendered = ""
-                for event in service.stream_turn(state.thread_id, prompt, chunk_chars=32):
+                for event in service.stream_pending_turn(state.thread_id, chunk_chars=32):
                     if event.kind == "status":
                         progress.markdown(
                             "<div class='agent-typing'>"
@@ -382,6 +377,17 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001
             progress.empty()
             st.error(f"操作失败：{exc}")
+        else:
+            st.rerun()
+        return
+
+    placeholder = "粘贴完整资料，或回复确认、修改意见和补充信息"
+    prompt = st.chat_input(placeholder, max_chars=64000, disabled=state.is_legacy)
+    if prompt:
+        try:
+            service.enqueue_message(state.thread_id, prompt)
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"发送失败：{exc}")
         else:
             st.rerun()
 

@@ -36,6 +36,8 @@ dependencies = [
     "pydantic>=2",
     "pydantic-settings>=2",
     "httpx",
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
     "pyyaml",
     "openai",
     "streamlit",

@@ -1,52 +1,55 @@
-import type { AgentInfo, ConfigField, LogResponse, StartStopResponse } from '../types';
-
-const API_BASE = 'http://localhost:8000';
+import type { AgentInfo, ConfigField, LogResponse, StartStopResponse } from '../types'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+  const response = await fetch(path, {
     ...options,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || `HTTP ${res.status}`);
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.error || body.detail || `HTTP ${response.status}`)
   }
-  return res.json();
+  if (response.status === 204) return undefined as T
+  return response.json() as Promise<T>
 }
 
+export async function readSse(
+  response: Response,
+  onEvent: (event: string, data: any, id?: string) => void,
+) {
+  if (!response.ok || !response.body) throw new Error(`Stream failed: HTTP ${response.status}`)
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    buffer += decoder.decode(value, { stream: !done })
+    const blocks = buffer.split('\n\n')
+    buffer = blocks.pop() || ''
+    for (const block of blocks) {
+      if (!block || block.startsWith(':')) continue
+      let event = 'message'; let id: string | undefined; const data: string[] = []
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        if (line.startsWith('id:')) id = line.slice(3).trim()
+        if (line.startsWith('data:')) data.push(line.slice(5).trim())
+      }
+      if (data.length) onEvent(event, JSON.parse(data.join('\n')), id)
+    }
+    if (done) break
+  }
+}
+
+const service = (agent: string, path: string) => `/api/agents/${agent}/service/${path}`
+
 export const api = {
-  /** List all agents with status */
   listAgents: () => request<AgentInfo[]>('/api/agents'),
-
-  /** Get single agent status */
   getAgent: (id: string) => request<AgentInfo>(`/api/agents/${id}`),
-
-  /** Start an agent */
-  startAgent: (id: string) =>
-    request<StartStopResponse>(`/api/agents/${id}/start`, { method: 'POST' }),
-
-  /** Stop an agent */
-  stopAgent: (id: string) =>
-    request<StartStopResponse>(`/api/agents/${id}/stop`, { method: 'POST' }),
-
-  /** Atomically toggle from the backend's actual process state */
-  toggleAgent: (id: string) =>
-    request<StartStopResponse>(`/api/agents/${id}/toggle`, { method: 'POST' }),
-
-  /** Get agent config */
+  startAgent: (id: string) => request<StartStopResponse>(`/api/agents/${id}/start`, { method: 'POST' }),
+  stopAgent: (id: string) => request<StartStopResponse>(`/api/agents/${id}/stop`, { method: 'POST' }),
   getConfig: (id: string) => request<ConfigField[]>(`/api/agents/${id}/config`),
-
-  /** Update agent config */
-  updateConfig: (id: string, updates: Record<string, string>) =>
-    request<ConfigField[]>(`/api/agents/${id}/config`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    }),
-
-  /** Get recent logs */
-  getLogs: (id: string, lines = 200) =>
-    request<LogResponse>(`/api/agents/${id}/logs?lines=${lines}`),
-
-  /** WebSocket URL for live log streaming */
-  logStreamUrl: (id: string) => `ws://localhost:8000/ws/agents/${id}/logs`,
-};
+  updateConfig: (id: string, body: Record<string, string>) => request<ConfigField[]>(`/api/agents/${id}/config`, { method: 'PUT', body: JSON.stringify(body) }),
+  getLogs: (id: string) => request<LogResponse>(`/api/agents/${id}/logs?lines=200`),
+  service: <T>(agent: string, path: string, options?: RequestInit) => request<T>(service(agent, path), options),
+  serviceUrl: service,
+}

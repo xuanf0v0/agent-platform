@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import httpx
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from agent_registry import get_agent, list_agents
 from config_service import get_config, update_config
@@ -139,6 +140,59 @@ async def api_get_logs(agent_id: str, lines: int = 200) -> dict[str, Any]:
         return JSONResponse({"error": f"Unknown agent: {agent_id}"}, status_code=404)
     logs = process_manager.get_logs(agent_id, tail=lines)
     return {"agent_id": agent_id, "lines": logs, "total": len(logs)}
+
+
+@app.api_route(
+    "/api/agents/{agent_id}/service/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+async def api_agent_service(agent_id: str, path: str, request: Request):
+    """Proxy an active Agent API without exposing its private port to Vue."""
+    agent = get_agent(agent_id)
+    if agent is None:
+        return JSONResponse({"error": f"Unknown agent: {agent_id}"}, status_code=404)
+    info = process_manager.reconcile_status(agent_id)
+    if info is None or info.status != AgentStatus.RUNNING:
+        return JSONResponse({"error": "Agent is not running"}, status_code=503)
+
+    target = f"http://127.0.0.1:{info.port}/{path}"
+    body = await request.body()
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in {"host", "content-length", "connection"}
+    }
+
+    is_stream = path.endswith("events") or path.endswith("messages")
+
+    async def stream():
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream(
+                request.method,
+                target,
+                params=request.query_params,
+                content=body,
+                headers=headers,
+            ) as response:
+                async for chunk in response.aiter_raw():
+                    yield chunk
+
+    if is_stream:
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
+    async with httpx.AsyncClient(timeout=None) as client:
+        response = await client.request(
+            request.method,
+            target,
+            params=request.query_params,
+            content=body,
+            headers=headers,
+        )
+    return Response(
+        content=response.content,
+        status_code=response.status_code,
+        media_type=response.headers.get("content-type", "application/json"),
+    )
 
 
 # ---------------------------------------------------------------------------

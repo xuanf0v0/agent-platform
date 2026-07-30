@@ -11,10 +11,15 @@ from agent_registry import get_agent
 from process_manager import AgentStatus, ProcessManager
 
 
-def test_creation_agent_uses_streamlit_without_react_build() -> None:
+def test_creation_agent_uses_fastapi_and_keeps_legacy_streamlit() -> None:
     agent = get_agent("listing-creation")
     assert agent is not None
     assert agent["api_command"][:3] == [
+        ".venv/bin/uvicorn",
+        "amazon_create.api:app",
+        "--host",
+    ]
+    assert agent["legacy_ui_command"][:3] == [
         ".venv/bin/streamlit",
         "run",
         "amazon_create/ui/app.py",
