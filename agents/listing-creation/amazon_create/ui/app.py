@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from time import sleep
 
 import streamlit as st
 from amazon_create.config import Settings
@@ -351,22 +352,35 @@ def main() -> None:
     if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
+            st.caption("已发送")
         try:
             with st.chat_message("assistant"):
-                progress = st.status("正在准备回复…", expanded=False)
+                progress = st.empty()
+                progress.markdown(
+                    "<div class='agent-typing'><span class='agent-typing-label'>Agent 正在响应</span>"
+                    "<span class='typing-dots'><i></i><i></i><i></i></span></div>",
+                    unsafe_allow_html=True,
+                )
                 response = st.empty()
                 rendered = ""
-                for event in service.stream_turn(state.thread_id, prompt):
+                for event in service.stream_turn(state.thread_id, prompt, chunk_chars=32):
                     if event.kind == "status":
-                        progress.update(label=event.content, state="running")
+                        progress.markdown(
+                            "<div class='agent-typing'>"
+                            f"<span class='agent-typing-label'>{event.content}</span>"
+                            "<span class='typing-dots'><i></i><i></i><i></i></span></div>",
+                            unsafe_allow_html=True,
+                        )
                     elif event.kind == "text":
+                        progress.empty()
                         rendered += event.content
                         response.markdown(rendered + "▍")
+                        sleep(0.018)
                     elif event.kind == "done":
+                        progress.empty()
                         response.markdown(rendered)
-                        progress.update(label="回复已生成", state="complete")
         except Exception as exc:  # noqa: BLE001
-            progress.update(label="生成失败", state="error")
+            progress.empty()
             st.error(f"操作失败：{exc}")
         else:
             st.rerun()

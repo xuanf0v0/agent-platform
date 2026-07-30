@@ -166,6 +166,40 @@ h1 { letter-spacing: -0.03em; }
   margin-bottom: .65rem;
   padding: .25rem .45rem;
 }
+[data-testid="stChatMessage"] [data-testid="stCaptionContainer"] {
+  color: rgba(165, 243, 252, 0.5);
+  font-size: .72rem;
+  margin-top: -.35rem;
+  text-align: right;
+}
+.agent-typing {
+  align-items: center;
+  background: rgba(34, 211, 238, 0.07);
+  border: 1px solid rgba(103, 232, 249, 0.2);
+  border-radius: 14px;
+  color: var(--soft);
+  display: inline-flex;
+  gap: .72rem;
+  min-height: 2.65rem;
+  padding: .62rem .82rem;
+}
+.agent-typing-label { font-size: .86rem; }
+.typing-dots { align-items: center; display: inline-flex; gap: .28rem; }
+.typing-dots i {
+  animation: typing-bounce 1.05s ease-in-out infinite;
+  background: var(--cyan-soft);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(103, 232, 249, .55);
+  display: block;
+  height: .38rem;
+  width: .38rem;
+}
+.typing-dots i:nth-child(2) { animation-delay: .14s; }
+.typing-dots i:nth-child(3) { animation-delay: .28s; }
+@keyframes typing-bounce {
+  0%, 60%, 100% { opacity: .35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-.28rem); }
+}
 [data-testid="stChatInput"] { background: rgba(7, 20, 38, 0.92); border-color: var(--border-strong); }
 [data-testid="stExpander"] {
   background: rgba(8, 18, 35, 0.5);
@@ -177,6 +211,9 @@ code { color: var(--cyan-soft) !important; }
 @media (max-width: 760px) {
   [data-testid="stMainBlockContainer"] { padding-top: 4rem; }
   .status-strip { align-items: flex-start; flex-direction: column; gap: .35rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing-dots i { animation: none; opacity: .75; }
 }
 </style>
 """

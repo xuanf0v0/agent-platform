@@ -51,6 +51,7 @@ _LABELED_ASIN_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 _ASIN_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Z0-9]{10}$")
+_ASIN_IN_TEXT_RE: Final[re.Pattern[str]] = re.compile(r"\b(B0[A-Z0-9]{8})\b", re.IGNORECASE)
 
 
 def normalize_marketplace(value: str) -> str:
@@ -86,11 +87,42 @@ def extract_labeled_product_asin(text: str) -> str:
     return normalize_asin(match.group(1)) if match else ""
 
 
+def extract_short_marketplace_answer(text: str) -> str:
+    """Recognize one marketplace from a conversational short answer only."""
+    clean = " ".join(text.strip().split())
+    direct = normalize_marketplace(clean)
+    if direct:
+        return direct
+    matches = {
+        normalized
+        for alias, normalized in MARKET_ALIASES.items()
+        if alias in clean
+    }
+    matches.update(
+        match.upper()
+        for match in re.findall(
+            r"\b(?:US|UK|DE|FR|IT|ES|JP|CA|MX|AU|AE|IN|BR)\b",
+            clean,
+            re.IGNORECASE,
+        )
+    )
+    return matches.pop() if len(matches) == 1 else ""
+
+
+def extract_short_asin_answer(text: str) -> str:
+    """Return a single ASIN from a short conversational answer."""
+    matches = {normalize_asin(match) for match in _ASIN_IN_TEXT_RE.findall(text)}
+    matches.discard("")
+    return matches.pop() if len(matches) == 1 else ""
+
+
 __all__ = [
     "MARKET_ALIASES",
     "MARKET_CODES",
     "extract_explicit_marketplace",
     "extract_labeled_product_asin",
+    "extract_short_asin_answer",
+    "extract_short_marketplace_answer",
     "normalize_asin",
     "normalize_marketplace",
 ]

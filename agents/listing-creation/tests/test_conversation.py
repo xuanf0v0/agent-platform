@@ -84,6 +84,258 @@ def test_missing_identity_fields_are_asked_together_in_chat(tmp_path: Path) -> N
     assert "品牌" in reply
 
 
+def test_short_marketplace_answer_updates_current_fact_without_repeating_summary(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path / "short-marketplace.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    snapshot = service.send_message(
+        thread_id,
+        "产品：Wall File Organizer\n产品类型：Hanging Wall Files\n品牌：generic",
+    )
+
+    snapshot = service.send_message(thread_id, "us")
+
+    values = {item.key: item.value for item in snapshot.state.candidates}
+    assert values["marketplace"] == "US"
+    assert values["language"] == "en"
+    reply = snapshot.state.messages[-1].content
+    assert "已记录 目标站点：US、目标语言：en" in reply
+    assert "产品事实摘要" not in reply
+
+
+def test_sellersprite_pipe_rows_extract_target_product_without_placeholder_facts(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path / "sellersprite-pipe.sqlite3")
+    snapshot = service.create_session()
+    source = """细分类目
+Hanging Wall Files|SellerSprite,US,ASIN详情|
+目标子体|Black / 5 Tier / Item|SellerSprite, B0DSM0RXZK|
+当前价格|$17.88|SellerSprite 快照|
+产品尺寸|待确认|
+流量结构|自然80.60%,广告19.40%|SIF|
+"""
+
+    snapshot = service.send_message(snapshot.state.thread_id, source)
+
+    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
+    assert values["product_type"] == "Hanging Wall Files"
+    assert values["product_asin"] == "B0DSM0RXZK"
+    assert values["listing_scope"] == "child"
+    assert values["color"] == "Black"
+    assert values["tier_count"] == "5 Tier"
+    assert values["traffic_mix"] == "自然80.60%,广告19.40%"
+    assert "待确认" not in values.values()
+
+
+def test_multiline_field_update_is_not_misread_as_one_short_answer(tmp_path: Path) -> None:
+    service = _service(tmp_path / "multiline-intake.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    service.send_message(thread_id, "产品 ASIN：B0DSM0RXZK\n站点：US")
+
+    snapshot = service.send_message(
+        thread_id,
+        "品牌：generic\n材质：metal\n包装内容：wall file organizer and mounting hardware",
+    )
+
+    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
+    assert values["brand"] == "generic"
+    assert values["material"] == "metal"
+    assert values["package_contents"] == "wall file organizer and mounting hardware"
+    assert not values.get("product_name", "")
+
+
+def test_sellersprite_intake_dialogue_reaches_audience_after_confirmations(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path / "sellersprite-dialogue.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+
+    snapshot = service.send_message(
+        thread_id,
+        "细分类目\nHanging Wall Files|SellerSprite,US|\n"
+        "目标子体|Black / 5 Tier / Item|SellerSprite, B0DSM0RXZK|",
+    )
+    assert not {item.key: item.value for item in snapshot.state.candidates if item.value}.get(
+        "marketplace"
+    )
+
+    snapshot = service.send_message(thread_id, "us")
+    assert "已记录 目标站点：US、目标语言：en" in snapshot.state.messages[-1].content
+
+    snapshot = service.send_message(
+        thread_id,
+        "产品名称：5 Tier Wall File Organizer\n品牌：generic\n材质：metal\n"
+        "包装内容：5层文件架，安装五金件\n安装方式：壁挂",
+    )
+    snapshot = service.send_message(thread_id, "确认")
+    assert snapshot.state.phase == "facts"
+    assert "另外仍待确认的产品参数：尺寸" in snapshot.state.messages[-1].content
+
+    snapshot = service.send_message(thread_id, "媒体类目：no\n尺寸：15 x 4 x 20 in")
+    snapshot = service.send_message(thread_id, "确认")
+
+    assert snapshot.state.phase == "workflow"
+    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
+    assert snapshot.state.current_block_id == "audience:1"
+
+
+def test_bare_asin_answer_is_mapped_to_the_active_asin_question(tmp_path: Path) -> None:
+    service = _service(tmp_path / "bare-asin.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    service.send_message(
+        thread_id,
+        "产品：Wall File Organizer\n站点：US\n产品类型：Hanging Wall Files\n品牌：generic",
+    )
+
+    snapshot = service.send_message(thread_id, "B0DSM0RXZK")
+
+    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
+    assert values["product_asin"] == "B0DSM0RXZK"
+    assert "已记录 产品 ASIN：B0DSM0RXZK" in snapshot.state.messages[-1].content
+
+
+def test_explicit_marketplace_correction_updates_the_derived_language(tmp_path: Path) -> None:
+    service = _service(tmp_path / "marketplace-correction.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    service.send_message(
+        thread_id,
+        "产品：Wall File Organizer\n站点：US\n产品类型：Hanging Wall Files\n品牌：generic",
+    )
+
+    snapshot = service.send_message(thread_id, "站点：CA")
+
+    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
+    assert values["marketplace"] == "CA"
+    assert values["language"] == "en-CA"
+    assert "产品事实摘要" in snapshot.state.messages[-1].content
+
+
+def test_unknown_short_answer_does_not_become_an_identity_fact(tmp_path: Path) -> None:
+    service = _service(tmp_path / "unknown-answer.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    service.send_message(thread_id, "产品 ASIN：B0DSM0RXZK\n站点：US")
+
+    snapshot = service.send_message(thread_id, "不知道")
+
+    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
+    assert not values.get("product_name", "")
+    reply = snapshot.state.messages[-1].content
+    assert "不能写入“未知”或猜测值" in reply
+    assert "产品事实摘要" not in reply
+
+
+def test_complete_english_brief_starts_the_workflow_after_one_confirmation(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path / "english-intake.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    snapshot = service.send_message(
+        thread_id,
+        "Product Name: Wall File Organizer\nProduct ASIN: B0DSM0RXZK\n"
+        "Marketplace: US\nProduct Type: Hanging Wall Files\nBrand: generic\n"
+        "Media Category: no\nListing Scope: child\nMaterial: metal\n"
+        "Size: 15 x 4 x 20 in",
+    )
+    snapshot = service.send_message(thread_id, "confirm")
+
+    assert snapshot.state.phase == "workflow"
+    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
+
+
+def test_natural_sentence_for_marketplace_is_resolved_only_in_intake_context(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path / "natural-marketplace.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    service.send_message(
+        thread_id,
+        "产品名称：Wall File Organizer\n产品类型：Hanging Wall Files\n品牌：generic",
+    )
+
+    snapshot = service.send_message(thread_id, "这个产品做美国站")
+
+    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
+    assert values["marketplace"] == "US"
+    assert values["language"] == "en"
+    assert "产品事实摘要" not in snapshot.state.messages[-1].content
+
+
+def test_free_form_natural_product_sentence_extracts_explicit_attributes(tmp_path: Path) -> None:
+    service = _service(tmp_path / "free-form-intake.sqlite3")
+    snapshot = service.create_session()
+
+    snapshot = service.send_message(
+        snapshot.state.thread_id,
+        "我有一个壁挂文件架，品牌是 generic，材质是 metal，尺寸 15 x 4 x 20 in，"
+        "类目是 Hanging Wall Files",
+    )
+
+    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
+    assert values["brand"] == "generic"
+    assert values["material"] == "metal"
+    assert values["size"] == "15 x 4 x 20 in"
+    assert values["product_type"] == "Hanging Wall Files"
+    assert not values.get("marketplace", "")
+
+
+def test_natural_asin_media_scope_and_confirmation_dialogue(tmp_path: Path) -> None:
+    service = _service(tmp_path / "natural-dialogue.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    service.send_message(
+        thread_id,
+        "产品名称：Wall File Organizer\n站点：US\n产品类型：Hanging Wall Files\n"
+        "品牌：generic\n材质：metal\n尺寸：15 x 4 x 20 in",
+    )
+
+    snapshot = service.send_message(thread_id, "ASIN 是 B0DSM0RXZK")
+    assert "产品 ASIN：B0DSM0RXZK" in snapshot.state.messages[-1].content
+    snapshot = service.send_message(thread_id, "这个产品不是媒体类目")
+    assert "是否 Media 类目：no" in snapshot.state.messages[-1].content
+    snapshot = service.send_message(thread_id, "这次做子体")
+    assert "父体/子体范围：child" in snapshot.state.messages[-1].content
+
+    snapshot = service.send_message(thread_id, "好的，以上都没问题，请继续")
+
+    assert snapshot.state.phase == "workflow"
+    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
+
+
+def test_all_natural_language_intake_reaches_market_research(tmp_path: Path) -> None:
+    service = _service(tmp_path / "all-natural-dialogue.sqlite3")
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+
+    turns = (
+        "我有一个壁挂文件架，品牌是 generic，材质 metal，尺寸 15 x 4 x 20 in，类目是 Hanging Wall Files",
+        "这个产品卖美国站",
+        "ASIN 是 B0DSM0RXZK",
+        "它不是媒体类目",
+        "这次做子体",
+        "产品名称是 5 Tier Wall File Organizer",
+        "好的，以上都没问题，请继续",
+    )
+    for turn in turns:
+        snapshot = service.send_message(thread_id, turn)
+
+    assert snapshot.state.phase == "workflow"
+    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
+    values = {item.key: item.value for item in snapshot.state.confirmed_candidates()}
+    assert values["product_name"] == "5 Tier Wall File Organizer"
+    assert values["marketplace"] == "US"
+    assert values["listing_scope"] == "child"
+
+
 def test_unstructured_long_prompt_extracts_all_atomic_facts(
     tmp_path: Path,
     monkeypatch,
@@ -421,8 +673,10 @@ def test_stream_turn_emits_progress_before_complete_reply(tmp_path: Path) -> Non
 
     events = list(service.stream_turn(snapshot.state.thread_id, _COMPLETE_BRIEF, chunk_chars=17))
 
+    assert events[0].kind == "status"
+    assert "已收到消息" in events[0].content
     assert any(event.kind == "status" for event in events)
-    assert any(event.kind == "text" for event in events)
+    assert len([event for event in events if event.kind == "text"]) > 1
     assert events[-1].kind == "done"
     persisted = service.snapshot(snapshot.state.thread_id)
     assert persisted.state.messages[-1].role == "assistant"

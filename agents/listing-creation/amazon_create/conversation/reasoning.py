@@ -47,12 +47,19 @@ _BASE_METADATA: Final[dict[str, tuple[str, str, str]]] = {
     for key, label, group, question in _BASE_REQUIREMENTS
 }
 _FIELD_PATTERNS: Final[tuple[tuple[str, str, str], ...]] = (
-    ("product_name", "产品名称", r"(?:产品|产品名|product)\s*[:：]\s*(.+)"),
+    ("product_name", "产品名称", r"(?:产品名称|产品名|产品|product(?:\s*name)?)\s*[:：]\s*(.+)"),
     ("brand", "品牌", r"(?:品牌|brand)\s*[:：]\s*(.+)"),
-    ("product_type", "产品类型/类目", r"(?:产品类型|类目|product\s*type|category)\s*[:：]\s*(.+)"),
+    ("product_type", "产品类型/类目", r"(?:产品类型/类目|产品类型|类目|product\s*type|category)\s*[:：]\s*(.+)"),
     ("language", "目标语言", r"(?:语言|language)\s*[:：]\s*(.+)"),
     ("listing_scope", "父体/子体范围", r"(?:Listing\s*范围|父子体|scope)\s*[:：]\s*(parent|child|父体|子体)"),
     ("media_category", "是否 Media 类目", r"(?:媒体类目|media\s*category)\s*[:：]\s*(yes|no|true|false|是|否)"),
+)
+_NATURAL_FIELD_PATTERNS: Final[tuple[tuple[str, str, str], ...]] = (
+    ("product_name", "产品名称", r"(?:产品名称|产品名)\s*(?:是|为)\s*([^\n,，;；。]+)"),
+    ("brand", "品牌", r"(?:品牌|brand)\s*(?:是|为|就用|用)\s*([^\n,，;；。]+)"),
+    ("product_type", "产品类型/类目", r"(?:产品类型|类目|category)\s*(?:是|为)\s*([^\n,，;；。]+)"),
+    ("material", "材质", r"(?:材质|material)\s*(?:是|为)?\s*([^\n,，;；。]+)"),
+    ("size", "尺寸", r"(?:尺寸|size)\s*(?:是|为)?\s*(\d[^\n,，;；。]+)"),
 )
 _RESERVED_SPEC_KEYS: Final[frozenset[str]] = frozenset(
     {"product", "产品", "产品名", "站点", "市场", "品牌", "类目", "语言", "父子体", "媒体类目", "竞品"}
@@ -70,6 +77,9 @@ _KEY_ALIASES: Final[dict[str, str]] = {
     "材质": "material",
     "材料": "material",
     "尺寸": "size",
+    "产品尺寸": "size",
+    "商品尺寸": "size",
+    "包装尺寸": "package_dimensions",
     "规格尺寸": "size",
     "数量": "count",
     "件数": "count",
@@ -80,7 +90,30 @@ _KEY_ALIASES: Final[dict[str, str]] = {
     "兼容性": "compatibility",
     "认证": "certification",
     "质保": "warranty",
+    "包装内容": "package_contents",
+    "包装清单": "package_contents",
+    "安装方式": "installation_method",
+    "安装五金件": "installation_hardware",
+    "层数": "tier_count",
+    "细分类目": "product_type",
 }
+_PIPE_FIELD_KEYS: Final[dict[str, tuple[str, str, str]]] = {
+    "细分类目": ("product_type", "产品类型/类目", "基础信息"),
+    "目标子体": ("target_variant", "目标子体", "变体属性"),
+    "当前价格": ("current_price", "当前价格", "市场研究"),
+    "评分/评分数": ("rating_review_count", "评分/评分数", "市场研究"),
+    "细分类目排名": ("category_rank", "细分类目排名", "市场研究"),
+    "流量结构": ("traffic_mix", "流量结构", "市场研究"),
+    "核心市场词": ("core_market_term", "核心市场词", "关键词"),
+    "核心词搜索量": ("core_term_search_volume", "核心词搜索量", "关键词"),
+    "核心词市场估算量": ("core_term_market_volume", "核心词市场估算量", "关键词"),
+    "top 3点击集中度": ("top3_click_share", "Top3点击集中度", "市场研究"),
+    "可见竞品数": ("visible_competitor_count", "可见竞品数", "市场研究"),
+    "需求趋势": ("demand_trend", "需求趋势", "市场研究"),
+}
+_UNKNOWN_VALUES: Final[frozenset[str]] = frozenset(
+    {"待确认", "未知", "不详", "n/a", "na", "pending", "tbd", "-", "—"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +151,20 @@ def deterministic_candidates(text: str) -> list[FactCandidate]:
         match = re.search(pattern, clean, flags=re.IGNORECASE | re.MULTILINE)
         if match:
             values[key] = (label, match.group(1).strip())
+    for key, label, pattern in _NATURAL_FIELD_PATTERNS:
+        if key in values:
+            continue
+        match = re.search(pattern, clean, flags=re.IGNORECASE | re.MULTILINE)
+        if match:
+            values[key] = (label, match.group(1).strip())
+    if re.search(r"(?:不是|非)\s*(?:媒体类目|media(?:\s*category)?)", clean, re.IGNORECASE):
+        values["media_category"] = ("是否 Media 类目", "no")
+    elif re.search(r"(?:是|属于)\s*(?:媒体类目|media(?:\s*category)?)", clean, re.IGNORECASE):
+        values["media_category"] = ("是否 Media 类目", "yes")
+    if re.search(r"(?:做|为|是)\s*(?:子体|child)\b|\bchild\s+listing\b", clean, re.IGNORECASE):
+        values["listing_scope"] = ("父体/子体范围", "child")
+    elif re.search(r"(?:做|为|是)\s*(?:父体|parent)\b|\bparent\s+listing\b", clean, re.IGNORECASE):
+        values["listing_scope"] = ("父体/子体范围", "parent")
 
     marketplace = extract_explicit_marketplace(clean)
     if marketplace:
@@ -127,6 +174,8 @@ def deterministic_candidates(text: str) -> list[FactCandidate]:
         values["product_asin"] = ("产品 ASIN", product_asin)
 
     lines = [line.strip() for line in clean.splitlines() if line.strip()]
+
+    rows.extend(_pipe_table_candidates(lines))
 
     if "marketplace" in values:
         market = values["marketplace"][1]
@@ -192,6 +241,8 @@ def deterministic_candidates(text: str) -> list[FactCandidate]:
         if not match:
             continue
         key, value = match.group(1).strip(), match.group(2).strip()
+        if _is_unknown_value(value):
+            continue
         if key.casefold() in _RESERVED_SPEC_KEYS or any(
             row.source_quote == value and row.label_zh == key for row in rows
         ):
@@ -453,6 +504,95 @@ def _spec_candidate(fact_id: str, key: str, value: str, group: str) -> FactCandi
         source_label="user_message",
         source_quote=value.strip(),
     )
+
+
+def _pipe_table_candidates(lines: list[str]) -> list[FactCandidate]:
+    """Extract explicit facts from pasted SellerSprite-style pipe table rows."""
+    rows: list[FactCandidate] = []
+    pending_label = ""
+    for line in lines:
+        if "|" not in line:
+            normalized = " ".join(line.casefold().split())
+            pending_label = normalized if normalized in _PIPE_FIELD_KEYS else ""
+            continue
+        parts = [part.strip() for part in line.split("|")]
+        label, raw_value = parts[0], parts[1] if len(parts) > 1 else ""
+        normalized_label = " ".join(label.casefold().split())
+        if normalized_label not in _PIPE_FIELD_KEYS and pending_label:
+            raw_value = label
+            normalized_label = pending_label
+        pending_label = ""
+        metadata = _PIPE_FIELD_KEYS.get(normalized_label)
+        if metadata is None or not raw_value or _is_unknown_value(raw_value):
+            continue
+        key, display_label, group = metadata
+        rows.append(
+            FactCandidate(
+                fact_id=f"provided:{key}",
+                key=key,
+                label_zh=display_label,
+                value=raw_value,
+                group=group,
+                required=key in _BASE_KEYS,
+                question_zh=f"请确认{display_label}",
+                rationale_zh="从用户粘贴的结构化市场资料中提取，尚未获得人工确认",
+                source_label="user_message",
+                source_quote=raw_value,
+            )
+        )
+        if key == "target_variant":
+            rows.extend(_target_variant_candidates(raw_value))
+            asin_match = re.search(r"\b(B0[A-Z0-9]{8})\b", line, re.IGNORECASE)
+            if asin_match:
+                rows.append(
+                    FactCandidate(
+                        fact_id="base:product_asin",
+                        key="product_asin",
+                        label_zh="产品 ASIN",
+                        value=asin_match.group(1).upper(),
+                        group="基础信息",
+                        required=True,
+                        question_zh="请确认产品 ASIN",
+                        rationale_zh="从标记为目标子体的用户资料中提取，尚未获得人工确认",
+                        priority=0,
+                        blocking_stages=("audience", "product", "final_copy"),
+                        source_label="user_message",
+                        source_quote=asin_match.group(1).upper(),
+                    )
+                )
+    return rows
+
+
+def _target_variant_candidates(value: str) -> list[FactCandidate]:
+    """Split an explicitly named target-child label into safe variation facts."""
+    rows: list[FactCandidate] = [
+        FactCandidate(
+            fact_id="base:listing_scope",
+            key="listing_scope",
+            label_zh="父体/子体范围",
+            value="child",
+            group="合规范围",
+            required=True,
+            question_zh="请确认本次创建的是 child 子体",
+            rationale_zh="用户资料明确标记为目标子体",
+            source_label="user_message",
+            source_quote=value,
+        )
+    ]
+    parts = [part.strip() for part in value.split("/") if part.strip()]
+    if parts:
+        rows.append(_spec_candidate("spec:color", "颜色", parts[0], "变体属性"))
+    tier = next(
+        (part for part in parts if re.search(r"\b\d+\s*tier\b", part, re.IGNORECASE)),
+        "",
+    )
+    if tier:
+        rows.append(_spec_candidate("spec:tier_count", "层数", tier, "变体属性"))
+    return rows
+
+
+def _is_unknown_value(value: str) -> bool:
+    return " ".join(value.strip().casefold().split()) in _UNKNOWN_VALUES
 
 
 def _field(blob: str, pattern: str) -> str:

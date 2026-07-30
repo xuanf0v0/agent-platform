@@ -113,7 +113,6 @@ class ConversationService:
 
         def run() -> None:
             try:
-                events.put(("status", "正在读取你的消息并核对已确认事实"))
                 snapshot = self.send_message(thread_id, text)
             except Exception as exc:  # noqa: BLE001
                 events.put(("error", exc))
@@ -121,6 +120,7 @@ class ConversationService:
                 events.put(("complete", snapshot))
 
         worker = Thread(target=run, name=f"creation-turn-{thread_id[:8]}", daemon=True)
+        yield ConversationStreamEvent("status", "已收到消息，正在读取并核对已确认事实")
         worker.start()
         status_index = 0
         running_statuses = (

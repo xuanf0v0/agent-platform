@@ -17,6 +17,10 @@ from amazon_create.conversation.dialogue import (
     fact_summary_markdown,
     rule_hits_for_state,
 )
+from amazon_create.conversation.intake_parsing import (
+    extract_short_asin_answer,
+    extract_short_marketplace_answer,
+)
 from amazon_create.conversation.react import run_react_turn
 from amazon_create.conversation.reasoning import (
     base_fact_candidates,
@@ -92,6 +96,9 @@ _SENSITIVE_TERMS: Final[frozenset[str]] = frozenset(
     }
 )
 _MAX_SOURCE_BYTES: Final[int] = 128_000
+_UNAVAILABLE_ANSWERS: Final[frozenset[str]] = frozenset(
+    {"不知道", "不清楚", "暂无", "暂时没有", "无", "未知", "待确认", "pending", "tbd", "not sure"}
+)
 
 
 class GraphChannels(TypedDict, total=False):
@@ -197,13 +204,30 @@ def _handle_intake_turn(
         _confirm_fact_summary(state, settings)
         return
 
+    if _handle_unavailable_intake_answer(state, text):
+        return
+
+    contextual = _contextual_intake_candidates(state, text)
+    if contextual:
+        if not _append_source_material(state, text):
+            state.error = "source_prompt_too_large"
+            _append_assistant(state, "产品资料超过 128,000 UTF-8 bytes，请分批精简后重新发送。")
+            return
+        state.candidates = merge_candidates(state.candidates or base_fact_candidates(), contextual)
+        state.phase = "fact_summary"
+        state.fact_summary_status = SummaryStatus.AWAITING_CONFIRMATION
+        state.fact_summary_revision += 1
+        _append_contextual_intake_reply(state, contextual)
+        return
+
     if not _append_source_material(state, text):
         state.error = "source_prompt_too_large"
         _append_assistant(state, "产品资料超过 128,000 UTF-8 bytes，请分批精简后重新发送。")
         return
+    deterministic = deterministic_candidates(text)
     candidates = merge_candidates(
         state.candidates or base_fact_candidates(),
-        deterministic_candidates(text),
+        deterministic,
     )
     reasoned = reason_product_facts(state.source_material, candidates, settings=settings)
     state.candidates = merge_candidates(candidates, reasoned.candidates)
@@ -212,6 +236,15 @@ def _handle_intake_turn(
     state.fact_summary_revision += 1
     if reasoned.error:
         state.error = reasoned.error
+    _set_next_intake_candidate(state)
+    direct_updates = [item for item in deterministic if item.value.strip()]
+    if _should_ack_single_field_update(text, direct_updates):
+        current_values = {item.key: item for item in state.candidates}
+        _append_contextual_intake_reply(
+            state,
+            [current_values[item.key] for item in direct_updates if item.key in current_values],
+        )
+        return
     _append_assistant(state, fact_summary_markdown(state.candidates))
 
 
@@ -227,10 +260,25 @@ def _confirm_fact_summary(state: ConversationGraphState, settings: Settings) -> 
     if missing_identity:
         state.phase = "facts"
         state.pending_question_keys = tuple(item.key for item in missing_identity)
+        _set_next_intake_candidate(state)
         questions = "\n".join(f"- {item.question_zh}" for item in missing_identity)
+        missing_specs = [
+            item
+            for item in state.candidates
+            if item.required and not item.value.strip() and item not in missing_identity
+        ]
+        optional_context = ""
+        if missing_specs:
+            optional_context = (
+                "\n\n另外仍待确认的产品参数："
+                + "、".join(item.label_zh for item in missing_specs[:8])
+                + "。可一并补充；未提供的信息会在后续阶段标记为待确认。"
+            )
         _append_assistant(
             state,
-            "事实摘要已确认。开始前还缺少以下身份信息，请在一条消息中尽量补齐：\n" + questions,
+            "事实摘要已确认。开始前还缺少以下身份信息，请在一条消息中尽量补齐：\n"
+            + questions
+            + optional_context,
         )
         return
     if state.downstream_stale and state.restart_stage:
@@ -713,6 +761,194 @@ def _append_source_material(state: ConversationGraphState, content: str) -> bool
         return False
     state.source_material = combined
     return True
+
+
+def _contextual_intake_candidates(
+    state: ConversationGraphState,
+    text: str,
+) -> list[FactCandidate]:
+    """Interpret a short answer only when an intake field is awaiting a value.
+
+    Marketplace codes intentionally require a label in long source material. In a
+    chat turn whose sole purpose is filling a missing field, however, ``US`` is a
+    valid direct answer and should not cause the full fact summary to be repeated.
+    """
+    clean = text.strip()
+    if not clean or "\n" in clean or len(clean) > 120:
+        return []
+    existing = {item.key: item for item in state.candidates}
+    missing = [item for item in state.candidates if item.required and not item.value.strip()]
+    if not missing:
+        return []
+
+    marketplace = extract_short_marketplace_answer(clean)
+    marketplace_candidate = existing.get("marketplace")
+    if marketplace and (marketplace_candidate is None or not marketplace_candidate.value.strip()):
+        rows = [_intake_answer_candidate(existing, "marketplace", marketplace, clean)]
+        language_candidate = existing.get("language")
+        if language_candidate is None or not language_candidate.value.strip():
+            language = {
+                "US": "en", "UK": "en-GB", "CA": "en-CA", "DE": "de", "FR": "fr",
+                "IT": "it", "ES": "es", "JP": "ja", "MX": "es-MX",
+            }.get(marketplace)
+            if language:
+                rows.append(_intake_answer_candidate(existing, "language", language, clean))
+        return rows
+
+    current = next(
+        (item for item in state.candidates if item.fact_id == state.current_candidate_id),
+        None,
+    )
+    if current is None or current.value.strip():
+        current = min(missing, key=lambda item: (item.priority, item.group, item.label_zh))
+    if current.key == "product_asin":
+        asin = extract_short_asin_answer(clean)
+        return [_intake_answer_candidate(existing, "product_asin", asin, clean)] if asin else []
+    if current.key == "media_category":
+        normalized = _normalize_media_answer(clean)
+        return [_intake_answer_candidate(existing, current.key, normalized, clean)] if normalized else []
+    if current.key == "listing_scope":
+        normalized = _normalize_listing_scope_answer(clean)
+        return [_intake_answer_candidate(existing, current.key, normalized, clean)] if normalized else []
+    if current.key == "brand":
+        generic = re.search(r"\bgeneric\b", clean, re.IGNORECASE)
+        if generic:
+            return [_intake_answer_candidate(existing, current.key, "generic", clean)]
+    if _looks_like_field_statement(clean):
+        return []
+    if current.key in {"brand", "product_name", "product_type", "language", "media_category", "listing_scope"}:
+        return [_intake_answer_candidate(existing, current.key, clean, clean)]
+    return []
+
+
+def _normalize_media_answer(value: str) -> str:
+    clean = value.casefold()
+    if clean in {"no", "false", "否"} or any(
+        token in clean for token in ("不是媒体", "非媒体", "non-media", "not media")
+    ):
+        return "no"
+    if clean in {"yes", "true", "是"} or "媒体类目" in clean:
+        return "yes"
+    return ""
+
+
+def _normalize_listing_scope_answer(value: str) -> str:
+    clean = value.casefold()
+    if clean in {"child", "子体"} or "子体" in clean:
+        return "child"
+    if clean in {"parent", "父体"} or "父体" in clean:
+        return "parent"
+    return ""
+
+
+def _looks_like_field_statement(value: str) -> bool:
+    """Let deterministic extraction handle a sentence that names another field."""
+    return bool(
+        re.search(
+            r"(?:产品名称|产品名|品牌|材质|尺寸|类目|产品类型|媒体|media|子体|父体|child|parent)",
+            value,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _handle_unavailable_intake_answer(
+    state: ConversationGraphState,
+    text: str,
+) -> bool:
+    """Keep unavailable answers out of the fact ledger and Listing inputs."""
+    clean = " ".join(text.strip().casefold().split())
+    if clean not in _UNAVAILABLE_ANSWERS:
+        return False
+    current = next(
+        (item for item in state.candidates if item.fact_id == state.current_candidate_id),
+        None,
+    )
+    if current is None or current.value.strip():
+        return False
+    if current.key in _IDENTITY_KEYS:
+        _append_assistant(
+            state,
+            f"已记录你暂时无法提供“{current.label_zh}”。该字段属于启动工作流的必填身份信息，"
+            "不能写入“未知”或猜测值。请提供实际值后继续。",
+        )
+        return True
+    _append_assistant(
+        state,
+        f"已保留“{current.label_zh}”为待确认，不会写入 Listing。你可以继续补充其他字段，"
+        "或在确认事实摘要后让系统在后续阶段明确标注该缺口。",
+    )
+    return True
+
+
+def _intake_answer_candidate(
+    existing: dict[str, FactCandidate],
+    key: str,
+    value: str,
+    source_quote: str,
+) -> FactCandidate:
+    """Create a source-grounded update while retaining known field metadata."""
+    prior = existing.get(key)
+    if prior is not None:
+        return prior.model_copy(
+            update={
+                "value": value,
+                "source_label": "chat_field_answer",
+                "source_quote": source_quote,
+                "status": CandidateStatus.PENDING,
+            }
+        )
+    return FactCandidate(
+        fact_id=f"base:{key}",
+        key=key,
+        label_zh=key,
+        value=value,
+        question_zh=f"请确认{key}",
+        source_label="chat_field_answer",
+        source_quote=source_quote,
+    )
+
+
+def _append_contextual_intake_reply(
+    state: ConversationGraphState,
+    updates: list[FactCandidate],
+) -> None:
+    """Acknowledge one chat answer without re-rendering the whole summary."""
+    recorded = "、".join(f"{item.label_zh}：{item.value}" for item in updates)
+    _set_next_intake_candidate(state)
+    remaining = [item for item in state.candidates if item.required and not item.value.strip()]
+    if not remaining:
+        _append_assistant(
+            state,
+            f"已记录 {recorded}。事实字段已补齐，请回复“确认”以确认整份产品事实摘要并进入市场调研。",
+        )
+        return
+    current = next(
+        (item for item in state.candidates if item.fact_id == state.current_candidate_id),
+        min(remaining, key=lambda item: (item.priority, item.group, item.label_zh)),
+    )
+    _append_assistant(
+        state,
+        f"已记录 {recorded}。下一项请补充：{current.question_zh}\n\n"
+        "你也可以一次补充其余字段，全部核对后回复“确认”。",
+    )
+
+
+def _set_next_intake_candidate(state: ConversationGraphState) -> None:
+    """Keep a single explicit question target for terse follow-up answers."""
+    missing = [item for item in state.candidates if item.required and not item.value.strip()]
+    if not missing:
+        state.current_candidate_id = ""
+        state.pending_question_keys = ()
+        return
+    current = min(missing, key=lambda item: (item.priority, item.group, item.label_zh))
+    state.current_candidate_id = current.fact_id
+    state.pending_question_keys = tuple(item.key for item in missing)
+
+
+def _should_ack_single_field_update(text: str, updates: list[FactCandidate]) -> bool:
+    """Use an incremental response for one concise natural field statement."""
+    return "\n" not in text.strip() and len(updates) == 1
 
 
 def _looks_like_product_fact_revision(text: str) -> bool:

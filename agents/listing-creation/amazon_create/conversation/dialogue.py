@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from typing import Any, Final
 
@@ -15,7 +16,19 @@ from amazon_create.schemas.conversation import (
 from amazon_create.schemas.workflow import CreationStage, StageArtifact
 
 _CONFIRM_WORDS: Final[frozenset[str]] = frozenset(
-    {"确认", "认可", "通过", "没问题", "正确", "可以", "ok", "yes", "approve", "confirmed"}
+    {
+        "确认",
+        "认可",
+        "通过",
+        "没问题",
+        "正确",
+        "可以",
+        "ok",
+        "yes",
+        "approve",
+        "confirm",
+        "confirmed",
+    }
 )
 _CONTINUE_WORDS: Final[frozenset[str]] = frozenset(
     {"继续", "下一步", "next", "continue", "往下"}
@@ -64,7 +77,24 @@ def classify_intent(text: str) -> DialogueIntent:
     clean = " ".join(text.strip().casefold().split())
     if any(token in clean for token in _REJECT_WORDS):
         return DialogueIntent.REJECT
-    if clean in _CONFIRM_WORDS or any(clean.startswith(token) for token in ("确认以上", "认可以上")):
+    if clean in _CONFIRM_WORDS or any(
+        token in clean
+        for token in (
+            "确认以上",
+            "认可以上",
+            "以上没问题",
+            "以上正确",
+            "确认并继续",
+            "没问题继续",
+            "好的确认",
+            "确认继续",
+        )
+    ):
+        return DialogueIntent.CONFIRM
+    if not clean.endswith(("?", "？")) and re.search(
+        r"(?:确认|认可|没问题|正确|approve|confirm).*(?:继续|下一步|continue)",
+        clean,
+    ):
         return DialogueIntent.CONFIRM
     if clean in _CONTINUE_WORDS:
         return DialogueIntent.CONTINUE
