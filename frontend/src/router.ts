@@ -1,11 +1,11 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import DashboardPage from './pages/DashboardPage.vue'
 import CreationPage from './pages/CreationPage.vue'
 import OptimizationPage from './pages/OptimizationPage.vue'
 import { api } from './api/client'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', component: DashboardPage },
     { path: '/agents/listing-creation', component: CreationPage, meta: { agent: 'listing-creation' } },
