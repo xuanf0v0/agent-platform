@@ -4,7 +4,10 @@ param(
     [string]$Proxy = "",
     [switch]$Background,
     [switch]$BackgroundWorker,
-    [switch]$Status
+    [switch]$Status,
+    [switch]$Stop,
+    [ValidateRange(0, 120)]
+    [int]$TunnelWaitSeconds = 12
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +15,44 @@ $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir = Join-Path $ProjectRoot "backend"
 $FrontendDir = Join-Path $ProjectRoot "frontend"
 $Processes = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
+$PowerShellExecutable = (Get-Process -Id $PID).Path
+
+if (($Status -and $Stop) -or ($BackgroundWorker -and ($Status -or $Stop))) {
+    throw "Use only one lifecycle action: -Status, -Stop, or start options."
+}
+
+function Stop-PlatformProcessTree([int]$ProcessId) {
+    if ($ProcessId -eq $PID) { return }
+    & taskkill.exe /PID $ProcessId /T /F 2>$null | Out-Null
+}
+
+function Get-PlatformLaunchers {
+    $scriptPathPattern = [regex]::Escape((Join-Path $ProjectRoot "start.ps1"))
+    return Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -in @("powershell.exe", "pwsh.exe") -and
+        $_.ProcessId -ne $PID -and
+        $_.CommandLine -match $scriptPathPattern -and
+        $_.CommandLine -match "(^|\s)-BackgroundWorker(\s|$)"
+    }
+}
+
+if ($Stop) {
+    $stopped = $false
+    foreach ($launcher in @(Get-PlatformLaunchers)) {
+        Write-Host "Stopping platform launcher (PID $($launcher.ProcessId))..."
+        Stop-PlatformProcessTree $launcher.ProcessId
+        $stopped = $true
+    }
+    foreach ($portNumber in 8000, 5173, 8501, 8502, 20241) {
+        foreach ($listener in @(Get-NetTCPConnection -LocalPort $portNumber -State Listen -ErrorAction SilentlyContinue)) {
+            Write-Host "Stopping listener on port $portNumber (PID $($listener.OwningProcess))..."
+            Stop-PlatformProcessTree $listener.OwningProcess
+            $stopped = $true
+        }
+    }
+    if ($stopped) { Write-Host "Agent Platform stopped." } else { Write-Host "Agent Platform is already stopped." }
+    exit 0
+}
 
 if ($Status) {
     $runtimeDir = Join-Path $ProjectRoot ".tmp\runtime"
@@ -48,13 +89,13 @@ if ($Background -and -not $BackgroundWorker) {
     if ($Tunnel) { $workerArguments += "-Tunnel" }
     if ($Hostname) { $workerArguments += @("-Hostname", $Hostname) }
     if ($Proxy) { $workerArguments += @("-Proxy", $Proxy) }
-    $backgroundProcess = Start-Process powershell.exe -ArgumentList $workerArguments -WorkingDirectory $ProjectRoot -RedirectStandardOutput $platformLog -RedirectStandardError $platformErrorLog -WindowStyle Hidden -PassThru
+    $backgroundProcess = Start-Process $PowerShellExecutable -ArgumentList $workerArguments -WorkingDirectory $ProjectRoot -RedirectStandardOutput $platformLog -RedirectStandardError $platformErrorLog -WindowStyle Hidden -PassThru
     Write-Host "Agent Platform started in background (PID $($backgroundProcess.Id))."
     Write-Host "Local:  http://localhost:5173"
     Write-Host "API:    http://localhost:8000"
     if ($Tunnel) {
         Write-Host "Tunnel: waiting briefly for an address..."
-        $tunnelDeadline = (Get-Date).AddSeconds(12)
+        $tunnelDeadline = (Get-Date).AddSeconds($TunnelWaitSeconds)
         while ((Get-Date) -lt $tunnelDeadline) {
             if (Test-Path $tunnelUrlFile) { break }
             if (Test-Path $tunnelErrorFile) { break }
@@ -77,16 +118,9 @@ if ($Background -and -not $BackgroundWorker) {
 }
 
 function Stop-PreviousPlatformLaunchers {
-    $scriptPathPattern = [regex]::Escape((Join-Path $ProjectRoot "start.ps1"))
-    $launchers = Get-CimInstance Win32_Process | Where-Object {
-        $_.Name -eq "powershell.exe" -and
-        $_.ProcessId -ne $PID -and
-        $_.CommandLine -match "-File\s+$scriptPathPattern(\s|$)" -and
-        $_.CommandLine -match "(^|\s)-BackgroundWorker(\s|$)"
-    }
-    foreach ($launcher in $launchers) {
+    foreach ($launcher in @(Get-PlatformLaunchers)) {
         Write-Host "Stopping previous platform launcher (PID $($launcher.ProcessId))..."
-        & taskkill.exe /PID $launcher.ProcessId /T /F 2>$null | Out-Null
+        Stop-PlatformProcessTree $launcher.ProcessId
     }
 }
 
@@ -98,7 +132,7 @@ function Stop-PlatformListeners {
             $ownedProcessId = $listener.OwningProcess
             if ($ownedProcessId -eq $PID) { continue }
             Write-Host "Releasing port $portNumber (PID $ownedProcessId)..."
-            & taskkill.exe /PID $ownedProcessId /T /F 2>$null | Out-Null
+            Stop-PlatformProcessTree $ownedProcessId
         }
     }
 }
@@ -117,7 +151,7 @@ function Start-PlatformTunnel {
         "-UrlFile", $tunnelUrlFile, "-ErrorFile", $tunnelErrorFile
     )
     if ($Proxy) { $tunnelArguments += @("-Proxy", $Proxy) }
-    $tunnelProcess = Start-Process powershell.exe -ArgumentList $tunnelArguments -WorkingDirectory $ProjectRoot -WindowStyle Hidden -PassThru
+    $tunnelProcess = Start-Process $PowerShellExecutable -ArgumentList $tunnelArguments -WorkingDirectory $ProjectRoot -WindowStyle Hidden -PassThru
     $Processes.Add($tunnelProcess)
 }
 
@@ -181,7 +215,7 @@ finally {
     Write-Host "Stopping services..."
     foreach ($process in $Processes) {
         if (-not $process.HasExited) {
-            & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
+            Stop-PlatformProcessTree $process.Id
         }
     }
 }
