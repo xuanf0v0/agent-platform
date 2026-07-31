@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Literal
 
@@ -52,6 +53,11 @@ if TYPE_CHECKING:
 
 _MAX_REPAIR_ATTEMPTS = 5
 _MAX_DECISION_ATTEMPTS = 2
+_CHANGE_CLAIM_RE = re.compile(
+    r"(?:已(?:为您)?(?:补充|修改|优化|更新|调整|重写|替换|添加)|"
+    r"(?:have|has|successfully)\s+(?:added|modified|updated|revised|rewritten))",
+    re.IGNORECASE,
+)
 
 
 class ConversationFact(BaseModel):
@@ -94,6 +100,12 @@ def _validate_decision_contract(decision: ConversationDecision) -> ConversationD
         raise ValueError(message)
     if decision.action == "research" and not decision.research_query.strip():
         message = "模型选择重新研究, 但未返回研究查询"
+        raise ValueError(message)
+    if decision.action != "modify" and decision.listing is not None:
+        message = "非修改动作不得返回替换稿件"
+        raise ValueError(message)
+    if decision.action != "modify" and _CHANGE_CLAIM_RE.search(decision.assistant_reply):
+        message = "模型声称已修改终稿, 但未选择修改动作"
         raise ValueError(message)
     return decision
 
@@ -219,7 +231,9 @@ def _decide(  # noqa: PLR0913 - explicit model-decision boundary inputs
                 "\n\nOUTPUT_REPAIR_REQUIRED: The previous response did not match the "
                 "Final Listing Conversation JSON contract. Return exactly one object with "
                 "action, assistant_reply, research_query, facts, and listing. For a question "
-                "that does not change the listing, use action=answer and listing=null."
+                "that does not change the listing, use action=answer and listing=null. Never "
+                "claim that a draft was changed unless action=modify includes the complete "
+                "replacement listing."
             )
         raw = llm.complete(
             _system_prompt(),
@@ -366,7 +380,27 @@ def _release_candidate(  # noqa: PLR0913 - explicit quality-loop inputs
         paste_failures = tuple(
             paste_ready_errors(candidate, allow_weighted_base=allow_weighted_base)
         )
-        failures = (*paste_failures, *rule_failures, *english_failures)
+        target_bullet_count = baseline.rule_context.rules.supported_bullet_count
+        bullet_count_failures = (
+            (
+                f"Bullet count must be exactly {target_bullet_count}; "
+                f"candidate contains {len(candidate.bullets)}.",
+            )
+            if len(candidate.bullets) != target_bullet_count
+            else ()
+        )
+        unchanged_failures = (
+            ("候选终稿与当前终稿相同, 未实际应用用户要求的修改",)
+            if candidate == baseline.listing
+            else ()
+        )
+        failures = (
+            *bullet_count_failures,
+            *unchanged_failures,
+            *paste_failures,
+            *rule_failures,
+            *english_failures,
+        )
         if not failures and postflight.can_optimize:
             updated = baseline.model_copy(
                 update={

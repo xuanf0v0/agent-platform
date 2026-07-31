@@ -81,6 +81,36 @@ class MissingListingDecisionLLM:
         )
 
 
+@final
+class MisleadingAnswerDecisionLLM:
+    def __init__(self, revised: dict[str, object]) -> None:
+        self.call_count = 0
+        self.revised = revised
+
+    def complete(self, system: str, user: str, **kwargs: object) -> str:
+        del system, user, kwargs
+        self.call_count += 1
+        if self.call_count == 1:
+            return json.dumps(
+                {
+                    "action": "answer",
+                    "assistant_reply": "已为您补充到5条完整要点。",
+                    "listing": None,
+                },
+                ensure_ascii=False,
+            )
+        if self.call_count == 2:
+            return json.dumps(
+                {
+                    "action": "modify",
+                    "assistant_reply": "已补充为5条完整要点。",
+                    "listing": self.revised,
+                },
+                ensure_ascii=False,
+            )
+        return '{"issues":[]}'
+
+
 def test_final_conversation_prompt_has_only_its_own_output_contract() -> None:
     prompt = _system_prompt()
 
@@ -119,6 +149,40 @@ def test_incomplete_modify_action_is_repaired_once() -> None:
 
     assert turn.reply == "请说明需要修改的具体字段。"
     assert llm.call_count == 2
+
+
+def test_answer_cannot_claim_a_draft_change_without_replacing_it() -> None:
+    revised = {
+        "title": "Painting River Rocks for Crafts",
+        "item_highlights": "Smooth natural stones for creative projects",
+        "bullets": [
+            "Painting Surface: Smooth natural stones provide space for creative designs.",
+            "Creative Projects: Add patterns, lettering, or artwork with suitable supplies.",
+            "Display Options: Use finished pieces as desk accents or decorative markers.",
+            "Craft Activities: Plan hands-on painting projects for home or group settings.",
+            "Natural Variation: Shape, color, and texture may differ between stones.",
+        ],
+        "backend_search_terms": "pebble art garden markers keepsake",
+    }
+    llm = MisleadingAnswerDecisionLLM(revised)
+
+    turn = process_final_turn(
+        SOURCE,
+        completed(),
+        [
+            {
+                "role": "assistant",
+                "content": "当前只有2条，需要我补充到5条吗？",
+            }
+        ],
+        "补充",
+        settings=Settings(MOCK=True),
+        llm=llm,
+    )
+
+    assert turn.changed is True
+    assert len(turn.result.listing.bullets) == 5
+    assert llm.call_count == 3
 
 
 def test_answer_turn_does_not_replace_release_ready_listing() -> None:

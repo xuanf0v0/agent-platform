@@ -14,6 +14,7 @@ from amazon_copy.review.models import EvidenceSource, FactClaim
 if TYPE_CHECKING:
     from typing import Literal
     from amazon_copy.llm.base import LLMClient
+    from amazon_copy.schemas import OptimizedListingCopy
 ROCKS_SOURCE = 'Title: Natural River Rocks for Painting\n- Smooth natural stones provide prepared painting surfaces\n- Natural shape color and texture vary from stone to stone\n- Finished projects can become garden markers or desk decorations'
 VEST_SOURCE = 'Title: Toddler Swim Vest for Pool Practice\n- CHILD SAFE: Child safe flotation support for supervised pool practice\n- CLASSIFICATION: Swim vest with secure adjustable straps\n- FIT: Designed for toddlers during supervised water activities'
 WEDDING_SOURCE = 'Title: Gold Wedding Welcome Sign Stand 68x31x20 Inches\n- STABILITY: Ensures stability on various surfaces\n- CONTENTS: Includes 8 leather and water bags\n- DISPLAY: Holds a welcome sign for ceremony entrances'
@@ -87,7 +88,17 @@ class _CompatibilityLLM:
         self._call_count += 1
         payload = json.loads(user)
         count = int(payload['target_bullet_count'])
-        return json.dumps({'title': 'Natural River Rocks for Painting', 'item_highlights': 'Natural stones for creative painting projects.', 'bullets': ['Use Cases: Compatible with acrylic signs, foam boards, and wooden signs for a practical event display', *('Source-based product detail' for _ in range(count - 1))], 'backend_search_terms': ''})
+        if payload.get('validation_feedback'):
+            bullets = [
+                'Painting Surface: Smooth natural stones provide a prepared painting surface.',
+                'Creative Projects: Turn natural stones into source-based craft projects.',
+                'Display Options: Finished projects can become decorative desk displays.',
+                'Garden Markers: Painted stones can be used as garden markers.',
+                'Natural Variation: Shape, color, and texture vary between natural stones.',
+            ][:count]
+        else:
+            bullets = ['Use Cases: Compatible with acrylic signs, foam boards, and wooden signs for a practical event display', *('Source-based product detail' for _ in range(count - 1))]
+        return json.dumps({'title': 'Natural River Rocks for Painting', 'item_highlights': 'Natural stones for creative painting projects.', 'bullets': bullets, 'backend_search_terms': ''})
 
 class _ClassificationLLM:
 
@@ -146,6 +157,7 @@ def test_automatic_pipeline_removes_generated_compatibility_instead_of_blocking(
     fetcher = _ResearchFetcher(events)
     result = optimizer.run_automatic_optimization(ROCKS_SOURCE, context=optimizer.AutomaticOptimizationContext(marketplace='US', skip_approval=True), dependencies=_dependencies(fetcher, _CompatibilityLLM()))
     assert isinstance(result, CompletedOptimization)
+    assert len(result.listing.bullets) == 5
     assert 'compatible with acrylic' not in ' '.join(result.listing.bullets).casefold()
 
 def test_toddler_vest_clarification_resume_reuses_successful_research() -> None:
@@ -451,6 +463,37 @@ def test_painting_rock_uses_five_bullet_upload_shape() -> None:
     joined = ' '.join(result.listing.bullets).casefold()
     assert 'natural shape color and texture vary' in joined
     assert 'garden markers or desk decorations' in joined
+
+
+def test_final_release_gate_rejects_bullet_count_changed_after_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    fetcher = _ResearchFetcher(events)
+    llm = _ScenarioLLM(events)
+
+    def truncate_polish(
+        _settings: Settings | None,
+        listing: OptimizedListingCopy,
+    ) -> OptimizedListingCopy:
+        return listing.model_copy(update={"bullets": listing.bullets[:3]})
+
+    monkeypatch.setattr(
+        "amazon_copy.automatic_pipeline.polish_listing_with_editor",
+        truncate_polish,
+    )
+    result = optimizer.run_automatic_optimization(
+        ROCKS_SOURCE,
+        context=optimizer.AutomaticOptimizationContext(
+            marketplace="US",
+            skip_approval=True,
+        ),
+        dependencies=_dependencies(fetcher, llm),
+    )
+
+    assert result.status == "failed"
+    assert result.message == "终稿要点数量未通过发布门禁"
+    assert "candidate contains 3" in result.quality_failures[0]
 
 @pytest.mark.parametrize(('action', 'answer_value'), [('confirm', 'checked against the priority-1 rule'), ('remove', '')])
 def test_priority_conflict_resume_suppresses_exact_lower_claim(action: Literal['confirm', 'remove'], answer_value: str) -> None:

@@ -705,6 +705,75 @@ def _run_quality_gate(
     )
 
 
+def _run_deterministic_safety_gate(
+    listing: OptimizedListingCopy,
+    prepared: _PreparedDiagnosis,
+    run_dependencies: AutomaticOptimizationDependencies,
+) -> tuple[OptimizedListingCopy, ListingReviewReport]:
+    """Clean one candidate and regenerate once if cleanup removes a bullet."""
+    expected_bullets = prepared.rule_context.rules.supported_bullet_count
+    for safety_attempt in range(2):
+        polished = polish_listing_with_editor(run_dependencies.settings, listing)
+        if polished is not None:
+            listing = polished
+        _progress(run_dependencies, "确定性安全与发布门禁", 9)
+        postflight = review_listing(
+            postflight_review_request(
+                listing,
+                prepared.rule_context,
+                prepared.evidence,
+                prepared.review_request,
+            )
+        )
+        repaired_listing = safely_rewrite_output(
+            listing,
+            postflight,
+            prepared.evidence.suppressed_claim_terms,
+        )
+        if repaired_listing != listing:
+            listing = repaired_listing
+            postflight = review_listing(
+                postflight_review_request(
+                    listing,
+                    prepared.rule_context,
+                    prepared.evidence,
+                    prepared.review_request,
+                )
+            )
+        if len(listing.bullets) == expected_bullets or safety_attempt == 1:
+            return listing, postflight
+
+        # Deterministic removal can delete a whole unsupported bullet. Ask the
+        # generator for a complete evidence-bound replacement instead of
+        # padding with invented copy or silently releasing a short listing.
+        try:
+            listing = optimize_listing_request(
+                OptimizerRequest(
+                    source=prepared.source,
+                    llm=run_dependencies.llm,
+                    settings=run_dependencies.settings,
+                    review_request=prepared.review_request,
+                    specialized_guidance=prepared.specialized.guidance,
+                    suppressed_claim_terms=prepared.evidence.suppressed_claim_terms,
+                    research_context=prepared.research_context,
+                    source_review_summary=build_review_summary(prepared.source_report),
+                    diagnosis_summary=build_diagnosis_summary(prepared.diagnosis_report),
+                    original_source_text=prepared.original_listing_text,
+                    writing_analysis=prepared.writing_analysis,
+                    quality_feedback=(
+                        "The prior candidate lost a bullet during compliance cleanup. "
+                        f"Return exactly {expected_bullets} complete, nonblank bullets. "
+                        "Replace unsupported claims with a different source-supported "
+                        "benefit; do not repeat or rephrase removed claims."
+                    ),
+                    strict_quality_loop=False,
+                )
+            )
+        except (TimeoutError, OSError, RuntimeError, ValueError):
+            return listing, postflight
+    return listing, postflight
+
+
 def _run_optimize_from_prepared(
     prepared: _PreparedDiagnosis,
     run_dependencies: AutomaticOptimizationDependencies,
@@ -746,33 +815,12 @@ def _run_optimize_from_prepared(
             identity=prepared.identity,
             funnel_hypotheses=prepared.funnel_hypotheses,
         )
-    polished = polish_listing_with_editor(run_dependencies.settings, listing)
-    if polished is not None:
-        listing = polished
-    _progress(run_dependencies, "确定性安全与发布门禁", 9)
-    postflight = review_listing(
-        postflight_review_request(
-            listing,
-            prepared.rule_context,
-            prepared.evidence,
-            prepared.review_request,
-        )
-    )
-    repaired_listing = safely_rewrite_output(
+    expected_bullets = prepared.rule_context.rules.supported_bullet_count
+    listing, postflight = _run_deterministic_safety_gate(
         listing,
-        postflight,
-        prepared.evidence.suppressed_claim_terms,
+        prepared,
+        run_dependencies,
     )
-    if repaired_listing != listing:
-        listing = repaired_listing
-        postflight = review_listing(
-            postflight_review_request(
-                listing,
-                prepared.rule_context,
-                prepared.evidence,
-                prepared.review_request,
-            )
-        )
     # Quality gate: diagnose output grammar/structure, re-optimize if poor.
     try:
         listing, postflight, _output_diagnosis = _run_quality_gate(
@@ -830,6 +878,30 @@ def _run_optimize_from_prepared(
             diagnosis_report=prepared.diagnosis_report,
             identity=prepared.identity,
             funnel_hypotheses=prepared.funnel_hypotheses,
+        )
+    if len(listing.bullets) != expected_bullets:
+        failure = (
+            f"Bullet count must be exactly {expected_bullets}; "
+            f"final candidate contains {len(listing.bullets)}."
+        )
+        return FailedOptimization(
+            code="optimization_failed",
+            message="终稿要点数量未通过发布门禁",
+            source_review=prepared.source_report,
+            postflight_review=postflight,
+            rule_context=prepared.rule_context,
+            evidence_bundle=prepared.evidence,
+            research_cache=prepared.cache,
+            cache_reused=prepared.cache_reused,
+            specialized_rule_cache=prepared.specialized.cache,
+            specialized_cache_reused=prepared.specialized.cache_reused,
+            specialized_rule_guidance=prepared.specialized.guidance,
+            diagnosis_report=prepared.diagnosis_report,
+            identity=prepared.identity,
+            funnel_hypotheses=prepared.funnel_hypotheses,
+            last_candidate=listing,
+            last_candidate_text=format_canonical_optimized_listing(listing),
+            quality_failures=(failure,),
         )
     return CompletedOptimization(
         listing=listing,
