@@ -129,6 +129,9 @@ def test_automatic_pipeline_researches_before_review_and_completes_clean_output(
     assert result.rule_context.marketplace == 'US'
     assert result.rule_context.product_type == 'ART_CRAFT_MATERIAL'
     assert result.rule_context.gaps[0].code == 'authoritative_rules_missing'
+    assert result.diagnosis_report is not None
+    title_check = next(item for item in result.diagnosis_report.field_checks if item.field == 'Title')
+    assert title_check.metric == f"{len(result.listing.title)}/75 characters"
 
 def test_malformed_research_snapshot_degrades_to_safe_empty_evidence() -> None:
     events: list[str] = []

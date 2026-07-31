@@ -63,4 +63,7 @@ Return one JSON object only:
   top-level response remains the Final Listing Conversation action object above.
 - `assistant_reply` should briefly describe the result or answer. Do not paste the complete listing
   into it because the UI has a dedicated current-draft field.
+- When the seller asks about copy quality, inspect `current_release_ready_listing` and
+  `current_listing_diagnosis` for this turn. Do not reuse character counts, coverage scores,
+  issues, or recommendations from an earlier assistant message after the listing was modified.
 

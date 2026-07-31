@@ -915,7 +915,7 @@ def _run_optimize_from_prepared(
         specialized_rule_cache=prepared.specialized.cache,
         specialized_cache_reused=prepared.specialized.cache_reused,
         specialized_rule_guidance=prepared.specialized.guidance,
-        diagnosis_report=prepared.diagnosis_report,
+        diagnosis_report=_output_diagnosis,
         identity=prepared.identity,
         funnel_hypotheses=prepared.funnel_hypotheses,
     )

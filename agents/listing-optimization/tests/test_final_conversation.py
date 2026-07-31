@@ -116,6 +116,8 @@ def test_final_conversation_prompt_has_only_its_own_output_contract() -> None:
 
     assert '"action": "answer | modify | research | new_identity"' in prompt
     assert '"title": "..."' not in prompt
+    assert "current_listing_diagnosis" in prompt
+    assert "Do not reuse character counts" in prompt
 
 
 def test_invalid_decision_contract_is_repaired_once() -> None:
@@ -214,6 +216,37 @@ def test_answer_turn_does_not_replace_release_ready_listing() -> None:
     assert llm.call_count == 1
 
 
+def test_repeated_quality_assessment_is_repaired_against_current_listing() -> None:
+    repeated = "当前终稿整体合规，但语义覆盖只命中2/5类购买决策任务。"
+    llm = DecisionLLM(
+        [
+            {
+                "action": "answer",
+                "assistant_reply": repeated,
+                "listing": None,
+            },
+            {
+                "action": "answer",
+                "assistant_reply": "重新检查当前终稿后：五点长度均在限制内，当前覆盖维度符合要求。",
+                "listing": None,
+            },
+        ]
+    )
+
+    turn = process_final_turn(
+        SOURCE,
+        completed(),
+        [{"role": "assistant", "content": repeated}],
+        "检查一下文案质量如何",
+        settings=Settings(MOCK=True),
+        llm=llm,
+    )
+
+    assert turn.reply != repeated
+    assert "重新检查当前终稿" in turn.reply
+    assert llm.call_count == 2
+
+
 def test_new_identity_turn_keeps_current_listing() -> None:
     baseline = completed()
     llm = DecisionLLM(
@@ -306,6 +339,11 @@ def test_modify_turn_replaces_draft_only_after_release_checks() -> None:
     assert turn.changed is True
     assert turn.result.listing.title == revised["title"]
     assert turn.result.rendered_text != baseline.rendered_text
+    assert turn.result.diagnosis_report is not None
+    title_check = next(
+        item for item in turn.result.diagnosis_report.field_checks if item.field == "Title"
+    )
+    assert title_check.metric == f"{len(revised['title'])}/75 characters"
     assert llm.call_count == 2
 
 
