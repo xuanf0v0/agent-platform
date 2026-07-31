@@ -216,6 +216,26 @@ def test_answer_turn_does_not_replace_release_ready_listing() -> None:
     assert llm.call_count == 1
 
 
+def test_quality_answer_may_describe_existing_optimized_state() -> None:
+    reply = "当前终稿已优化五点长度，发布门禁仍然通过。"
+    llm = DecisionLLM(
+        [{"action": "answer", "assistant_reply": reply, "listing": None}]
+    )
+
+    turn = process_final_turn(
+        SOURCE,
+        completed(),
+        [],
+        "检查一下文案质量如何",
+        settings=Settings(MOCK=True),
+        llm=llm,
+    )
+
+    assert turn.reply == reply
+    assert turn.changed is False
+    assert llm.call_count == 1
+
+
 def test_repeated_quality_assessment_is_repaired_against_current_listing() -> None:
     repeated = "当前终稿整体合规，但语义覆盖只命中2/5类购买决策任务。"
     llm = DecisionLLM(

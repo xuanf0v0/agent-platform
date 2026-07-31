@@ -53,10 +53,12 @@ if TYPE_CHECKING:
     from amazon_copy.llm import LLMClient
 
 _MAX_REPAIR_ATTEMPTS = 5
-_MAX_DECISION_ATTEMPTS = 2
+_MAX_DECISION_ATTEMPTS = 4
 _CHANGE_CLAIM_RE = re.compile(
-    r"(?:已(?:为您)?(?:补充|修改|优化|更新|调整|重写|替换|添加)|"
-    r"(?:have|has|successfully)\s+(?:added|modified|updated|revised|rewritten))",
+    r"(?:(?:我|我们)已(?:经)?(?:为您)?(?:补充|修改|优化|更新|调整|重写|替换|添加)|"
+    r"已(?:经)?为您(?:补充|修改|优化|更新|调整|重写|替换|添加)|"
+    r"\b(?:i|we)(?:'ve|\s+have|\s+successfully)\s+"
+    r"(?:added|modified|updated|revised|rewritten)\b)",
     re.IGNORECASE,
 )
 
@@ -252,6 +254,7 @@ def _decide(  # noqa: PLR0913 - explicit model-decision boundary inputs
     for attempt in range(_MAX_DECISION_ATTEMPTS):
         user = context
         if attempt:
+            failure_detail = str(validation_error) if validation_error is not None else "unknown"
             user += (
                 "\n\nOUTPUT_REPAIR_REQUIRED: The previous response did not match the "
                 "Final Listing Conversation JSON contract. Return exactly one object with "
@@ -259,13 +262,14 @@ def _decide(  # noqa: PLR0913 - explicit model-decision boundary inputs
                 "that does not change the listing, use action=answer and listing=null. Never "
                 "claim that a draft was changed unless action=modify includes the complete "
                 "replacement listing. Do not repeat any previous assistant reply; inspect the "
-                "current release-ready listing and answer the current user message afresh."
+                "current release-ready listing and answer the current user message afresh. "
+                f"Previous validation error: {failure_detail}"
             )
         raw = llm.complete(
             _system_prompt(),
             user,
             json_mode=True,
-            temperature=0.35 if not feedback and not attempt else 0.1,
+            temperature=0.35 if not feedback and not attempt else 0.2,
             max_tokens=4096,
         )
         try:
