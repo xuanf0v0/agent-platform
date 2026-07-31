@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import config_service
@@ -38,5 +39,6 @@ def test_update_config_creates_missing_env_from_example(
     assert "OPENAI_API_KEY=test-secret" in content
     assert "WRITER_MODEL=writer-live" in content
     assert "MOCK=" not in content
-    assert env_path.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert env_path.stat().st_mode & 0o777 == 0o600
     assert all(field["key"] != "MOCK" for field in fields)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Final
 
@@ -10,6 +11,14 @@ from typing import Final
 # ---------------------------------------------------------------------------
 
 _ROOT: Final = Path(__file__).resolve().parents[1]
+
+
+def _venv_executable(agent_id: str, executable: str) -> str:
+    if os.name == "nt":
+        return str(
+            _ROOT / "agents" / agent_id / ".venv" / "Scripts" / f"{executable}.exe"
+        )
+    return f".venv/bin/{executable}"
 
 _AGENT_REGISTRY: Final[dict[str, dict]] = {
     "listing-creation": {
@@ -22,7 +31,7 @@ _AGENT_REGISTRY: Final[dict[str, dict]] = {
         "default_port": 8501,
         "icon": "✨",
         "api_command": [
-            ".venv/bin/uvicorn",
+            _venv_executable("listing-creation", "uvicorn"),
             "amazon_create.api:app",
             "--host",
             "127.0.0.1",
@@ -40,7 +49,7 @@ _AGENT_REGISTRY: Final[dict[str, dict]] = {
         "default_port": 8502,
         "icon": "🔧",
         "api_command": [
-            ".venv/bin/uvicorn",
+            _venv_executable("listing-optimization", "uvicorn"),
             "amazon_copy.api:app",
             "--host",
             "127.0.0.1",
@@ -48,7 +57,7 @@ _AGENT_REGISTRY: Final[dict[str, dict]] = {
             "8502",
         ],
         "legacy_ui_command": [
-            ".venv/bin/streamlit", "run", "amazon_copy/ui/app.py",
+            _venv_executable("listing-optimization", "streamlit"), "run", "amazon_copy/ui/app.py",
             "--server.address", "127.0.0.1", "--server.port", "8602",
             "--server.headless", "true",
         ],

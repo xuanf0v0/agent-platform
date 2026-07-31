@@ -1,4 +1,6 @@
 .DS_Store
+.cache/
+.tmp/
 __pycache__/
 *.py[cod]
 .venv/
@@ -6,6 +8,9 @@ __pycache__/
 
 frontend/node_modules/
 frontend/dist/
+*.tsbuildinfo
+cloudflare/config.yml
+cloudflare/*.json
 agents/*/.venv/
 agents/*/web/node_modules/
 agents/*/*/web/node_modules/

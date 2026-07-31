@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import signal
+from pathlib import Path
 
 import pytest
 
@@ -14,14 +16,71 @@ from process_manager import AgentStatus, ProcessManager
 def test_creation_agent_uses_fastapi_without_legacy_ui() -> None:
     agent = get_agent("listing-creation")
     assert agent is not None
+    executable = (
+        str(
+            Path(__file__).resolve().parents[1]
+            / "agents"
+            / "listing-creation"
+            / ".venv"
+            / "Scripts"
+            / "uvicorn.exe"
+        )
+        if os.name == "nt"
+        else ".venv/bin/uvicorn"
+    )
     assert agent["api_command"][:3] == [
-        ".venv/bin/uvicorn",
+        executable,
         "amazon_create.api:app",
         "--host",
     ]
     assert "legacy_ui_command" not in agent
     assert "web_dir" not in agent
     assert "web_dist" not in agent
+
+
+def test_incomplete_agent_environment_is_synced(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manager = ProcessManager()
+    python = tmp_path / ".venv" / ("Scripts" if os.name == "nt" else "bin") / (
+        "python.exe" if os.name == "nt" else "python"
+    )
+    python.parent.mkdir(parents=True)
+    python.touch()
+    calls: list[tuple[object, ...]] = []
+
+    class FakeProcess:
+        returncode = 0
+
+        async def communicate(self) -> tuple[bytes, None]:
+            return b"synced", None
+
+    async def fake_subprocess(*command: object, **_kwargs: object) -> FakeProcess:
+        calls.append(command)
+        return FakeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
+    readiness = iter((False, True))
+
+    async def fake_ready(_python: Path, _cwd: Path) -> bool:
+        return next(readiness)
+
+    monkeypatch.setattr(manager, "_environment_is_ready", fake_ready)
+
+    asyncio.run(manager._ensure_environment(tmp_path))
+
+    assert calls == [
+        (
+            "uv",
+            "sync",
+            "--frozen",
+            "--no-dev",
+            "--reinstall-package",
+            "fastapi",
+            "--reinstall-package",
+            "uvicorn",
+        )
+    ]
 
 
 def test_stop_cleans_port_without_tracked_parent() -> None:
@@ -42,6 +101,7 @@ def test_stop_cleans_port_without_tracked_parent() -> None:
     assert result.pid == 0
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group behavior")
 def test_port_cleanup_signals_detached_listener_process_group(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

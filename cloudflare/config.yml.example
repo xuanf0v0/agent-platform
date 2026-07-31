@@ -1,0 +1,12 @@
+# Copy this file to ~/.cloudflared/config.yml after running:
+#   cloudflared tunnel login
+#   cloudflared tunnel create agent-platform
+
+tunnel: <TUNNEL_UUID>
+# Windows example; on Linux use /home/<USER>/.cloudflared/<TUNNEL_UUID>.json
+credentials-file: C:\Users\<USER>\.cloudflared\<TUNNEL_UUID>.json
+
+ingress:
+  - hostname: agents.example.com
+    service: http://127.0.0.1:5173
+  - service: http_status:404

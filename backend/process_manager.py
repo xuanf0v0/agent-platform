@@ -91,7 +91,7 @@ class ProcessManager:
         return result
 
     async def start(self, agent_id: str) -> ProcessInfo:
-        """Prepare optional frontend assets and start the configured agent."""
+        """Prepare the agent environment and start its API process."""
         agent = get_agent(agent_id)
         if agent is None:
             raise ValueError(f"Unknown agent: {agent_id}")
@@ -108,23 +108,32 @@ class ProcessManager:
             cwd = Path(agent["path"])
             port = agent["default_port"]
 
+            await self._ensure_environment(cwd)
             await self._ensure_frontend(agent, cwd)
+
+            group_options: dict[str, Any]
+            if os.name == "nt":
+                group_options = {
+                    "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP,
+                }
+            else:
+                group_options = {"preexec_fn": os.setsid}
 
             info.process = await asyncio.create_subprocess_exec(
                 *agent["api_command"],
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(cwd),
-                preexec_fn=os.setsid,
+                **group_options,
             )
 
             info.pid = info.process.pid or 0
             info.started_at = time.time()
+            # Drain stdout immediately. Waiting until after readiness can hide the
+            # import error that caused startup to fail (and can fill the pipe).
+            asyncio.create_task(self._read_logs(agent_id))
             await self._wait_until_listening(info)
             info.status = AgentStatus.RUNNING
-
-            # Start log reader task
-            asyncio.create_task(self._read_logs(agent_id))
 
         except Exception as exc:
             info.status = AgentStatus.ERROR
@@ -152,6 +161,57 @@ class ProcessManager:
             await writer.wait_closed()
             return
         raise RuntimeError(f"agent API did not become ready on port {info.port}")
+
+    @staticmethod
+    def _venv_python(cwd: Path) -> Path:
+        if os.name == "nt":
+            return cwd / ".venv" / "Scripts" / "python.exe"
+        return cwd / ".venv" / "bin" / "python"
+
+    async def _ensure_environment(self, cwd: Path) -> None:
+        """Repair a missing or partial agent venv from its locked project."""
+        python = self._venv_python(cwd)
+        if await self._environment_is_ready(python, cwd):
+            return
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "uv",
+                "sync",
+                "--frozen",
+                "--no-dev",
+                "--reinstall-package",
+                "fastapi",
+                "--reinstall-package",
+                "uvicorn",
+                cwd=str(cwd),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "agent environment is incomplete and 'uv' is not installed"
+            ) from exc
+        output, _ = await process.communicate()
+        if process.returncode != 0:
+            message = output.decode("utf-8", errors="replace")[-2000:]
+            raise RuntimeError(f"agent environment sync failed: {message}")
+        if not await self._environment_is_ready(python, cwd):
+            raise RuntimeError("agent environment is still incomplete after sync")
+
+    @staticmethod
+    async def _environment_is_ready(python: Path, cwd: Path) -> bool:
+        if not python.is_file():
+            return False
+        check = await asyncio.create_subprocess_exec(
+            str(python),
+            "-c",
+            "import fastapi, uvicorn",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd=str(cwd),
+        )
+        return await check.wait() == 0
 
     def _reconcile_listener_status(self, info: ProcessInfo) -> None:
         """Recover lifecycle state after the manager process restarts."""
@@ -211,6 +271,15 @@ class ProcessManager:
 
     async def _terminate_tracked_process(self, process: asyncio.subprocess.Process) -> None:
         """Terminate the complete process group created for one managed agent."""
+        if os.name == "nt":
+            await self._taskkill(process.pid)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+            return
+
         try:
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)
         except ProcessLookupError:
@@ -226,6 +295,10 @@ class ProcessManager:
 
     async def _terminate_port_listeners(self, port: int) -> None:
         """Stop stale or detached processes that still listen on an agent port."""
+        if os.name == "nt":
+            for process_id in self._listener_pids(port):
+                await self._taskkill(process_id)
+            return
         self._signal_listener_groups(port, signal.SIGTERM)
         await asyncio.sleep(0.2)
         self._signal_listener_groups(port, signal.SIGKILL)
@@ -248,8 +321,44 @@ class ProcessManager:
                 continue
 
     @staticmethod
+    async def _taskkill(process_id: int) -> None:
+        """Terminate a Windows process tree without opening a console window."""
+        process = await asyncio.create_subprocess_exec(
+            "taskkill",
+            "/PID",
+            str(process_id),
+            "/T",
+            "/F",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        await process.wait()
+
+    @staticmethod
     def _listener_pids(port: int) -> tuple[int, ...]:
         """Return PIDs currently listening on a TCP port using the host lsof."""
+        if os.name == "nt":
+            result = subprocess.run(  # noqa: S603
+                ["netstat", "-ano", "-p", "TCP"],
+                check=False,
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            process_ids: set[int] = set()
+            for line in result.stdout.splitlines():
+                columns = line.split()
+                if (
+                    len(columns) == 5
+                    and columns[0].upper() == "TCP"
+                    and columns[1].rsplit(":", 1)[-1] == str(port)
+                    and columns[3].upper() == "LISTENING"
+                    and columns[4].isdigit()
+                ):
+                    process_ids.add(int(columns[4]))
+            return tuple(sorted(process_ids))
+
         result = subprocess.run(  # noqa: S603
             ["lsof", "-tiTCP:" + str(port), "-sTCP:LISTEN"],
             check=False,
