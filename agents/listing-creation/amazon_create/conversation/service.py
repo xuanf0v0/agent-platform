@@ -1,4 +1,4 @@
-"""SQLite-backed service facade for the conversational Streamlit UI."""
+"""SQLite-backed service facade for prompt-driven chat."""
 
 from __future__ import annotations
 
@@ -7,15 +7,18 @@ from collections.abc import Iterator
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from queue import Empty, Queue
-from threading import RLock, Thread
+from threading import RLock
 from typing import Any
 from uuid import uuid4
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from amazon_create.config import Settings
-from amazon_create.conversation.graph import build_conversation_graph, initial_graph_state
+from amazon_create.conversation.freeform_graph import (
+    build_conversation_graph,
+    initial_graph_state,
+    stream_reply,
+)
 from amazon_create.schemas.conversation import ConversationGraphState, ConversationSnapshot
 
 
@@ -67,179 +70,30 @@ class ConversationService:
         return ConversationSnapshot(state=state, interrupt=interrupt_value)
 
     def send_message(self, thread_id: str, text: str) -> ConversationSnapshot:
-        snapshot = self.snapshot(thread_id)
-        if snapshot.state.is_legacy:
-            return snapshot
         return self._invoke(thread_id, {"type": "message", "text": text})
 
     def enqueue_message(self, thread_id: str, text: str) -> ConversationSnapshot:
         """Persist a user message immediately, before slow Agent processing."""
-        snapshot = self.snapshot(thread_id)
-        if snapshot.state.is_legacy:
-            return snapshot
         return self._invoke(thread_id, {"type": "enqueue_message", "text": text})
-
-    def stream_message(
-        self,
-        thread_id: str,
-        text: str,
-        *,
-        chunk_chars: int = 48,
-    ) -> tuple[ConversationSnapshot, Iterator[str]]:
-        """Process atomically, then stream only the newly persisted assistant reply."""
-        before = self.snapshot(thread_id)
-        snapshot = self.send_message(thread_id, text)
-        new_messages = snapshot.state.messages[len(before.state.messages) :]
-        reply = "\n\n".join(
-            message.content for message in new_messages if message.role == "assistant"
-        )
-
-        def chunks() -> Iterator[str]:
-            size = max(1, chunk_chars)
-            for index in range(0, len(reply), size):
-                yield reply[index : index + size]
-
-        return snapshot, chunks()
-
-    def stream_turn(
-        self,
-        thread_id: str,
-        text: str,
-        *,
-        chunk_chars: int = 48,
-        status_interval_seconds: float = 0.35,
-    ) -> Iterator[ConversationStreamEvent]:
-        """Execute a turn in the background while yielding visible UI progress.
-
-        Conversation state is persisted only after the graph finishes. The stream
-        therefore never leaves partial assistant messages in SQLite, while the UI
-        receives progress immediately instead of waiting on a blocking graph call.
-        """
-        before = self.snapshot(thread_id)
-        events: Queue[tuple[str, Any]] = Queue()
-
-        def run() -> None:
-            try:
-                snapshot = self.send_message(thread_id, text)
-            except Exception as exc:  # noqa: BLE001
-                events.put(("error", exc))
-            else:
-                events.put(("complete", snapshot))
-
-        worker = Thread(target=run, name=f"creation-turn-{thread_id[:8]}", daemon=True)
-        yield ConversationStreamEvent("status", "已收到消息，正在读取并核对已确认事实")
-        worker.start()
-        status_index = 0
-        running_statuses = (
-            "正在提取产品事实与识别待确认信息",
-            "正在按规则执行当前工作流阶段",
-            "正在进行受控研究与生成可验证结论",
-            "正在整理本轮回复，请稍候",
-        )
-
-        while worker.is_alive() or not events.empty():
-            try:
-                kind, payload = events.get(timeout=status_interval_seconds)
-            except Empty:
-                yield ConversationStreamEvent("status", running_statuses[status_index])
-                status_index = (status_index + 1) % len(running_statuses)
-                continue
-            if kind == "status":
-                yield ConversationStreamEvent("status", str(payload))
-                continue
-            if kind == "error":
-                raise payload
-
-            snapshot = payload
-            new_messages = snapshot.state.messages[len(before.state.messages) :]
-            reply = "\n\n".join(
-                message.content for message in new_messages if message.role == "assistant"
-            )
-            size = max(1, chunk_chars)
-            for index in range(0, len(reply), size):
-                yield ConversationStreamEvent("text", reply[index : index + size])
-            yield ConversationStreamEvent("done")
-            return
 
     def stream_pending_turn(
         self,
         thread_id: str,
-        *,
-        chunk_chars: int = 48,
-        status_interval_seconds: float = 0.35,
     ) -> Iterator[ConversationStreamEvent]:
         """Process an already-visible user bubble and stream the assistant reply."""
         before = self.snapshot(thread_id)
         if not before.state.pending_user_message:
             raise ValueError("no pending user message")
-        events: Queue[tuple[str, Any]] = Queue()
-
-        def run() -> None:
-            try:
-                snapshot = self._invoke(thread_id, {"type": "process_pending_message"})
-            except Exception as exc:  # noqa: BLE001
-                events.put(("error", exc))
-            else:
-                events.put(("complete", snapshot))
-
-        worker = Thread(target=run, name=f"creation-pending-{thread_id[:8]}", daemon=True)
-        yield ConversationStreamEvent("status", "已收到消息，正在读取并核对已确认事实")
-        worker.start()
-        status_index = 0
-        running_statuses = (
-            "正在提取产品事实与识别待确认信息",
-            "正在按规则执行当前工作流阶段",
-            "正在进行受控研究与生成可验证结论",
-            "正在整理本轮回复，请稍候",
-        )
-
-        while worker.is_alive() or not events.empty():
-            try:
-                kind, payload = events.get(timeout=status_interval_seconds)
-            except Empty:
-                yield ConversationStreamEvent("status", running_statuses[status_index])
-                status_index = (status_index + 1) % len(running_statuses)
-                continue
-            if kind == "error":
-                raise payload
-            snapshot = payload
-            new_messages = snapshot.state.messages[len(before.state.messages) :]
-            reply = "\n\n".join(
-                message.content for message in new_messages if message.role == "assistant"
-            )
-            size = max(1, chunk_chars)
-            for index in range(0, len(reply), size):
-                yield ConversationStreamEvent("text", reply[index : index + size])
-            yield ConversationStreamEvent("done")
-            return
-
-    def confirm_current(self, thread_id: str) -> ConversationSnapshot:
-        """Compatibility helper; v2 uses a normal chat confirmation."""
-        return self.send_message(thread_id, "确认")
-
-    def confirm_fact(
-        self,
-        thread_id: str,
-        *,
-        fact_id: str,
-        revision: int,
-        value_digest: str,
-    ) -> ConversationSnapshot:
-        """Retain the legacy signature while using summary-level confirmation."""
-        _ = (fact_id, revision, value_digest)
-        return self.send_message(thread_id, "确认")
-
-    def confirm_unavailable(self, thread_id: str) -> ConversationSnapshot:
-        return self.send_message(thread_id, "当前无法提供，请标记为待确认")
-
-    def revise_fact(self, thread_id: str, fact_id: str, value: str) -> ConversationSnapshot:
-        return self._invoke(
+        yield ConversationStreamEvent("status", "Agent 正在思考")
+        rendered = ""
+        for chunk in stream_reply(before.state, self.settings):
+            rendered += chunk
+            yield ConversationStreamEvent("text", chunk)
+        self._invoke(
             thread_id,
-            {"type": "revise_fact", "fact_id": fact_id, "value": value},
+            {"type": "complete_streamed_message", "text": rendered},
         )
-
-    def regenerate(self, thread_id: str) -> ConversationSnapshot:
-        return self._invoke(thread_id, {"type": "regenerate"})
+        yield ConversationStreamEvent("done")
 
     def rename_session(self, thread_id: str, title: str) -> ConversationSnapshot:
         snapshot = self._invoke(thread_id, {"type": "rename", "title": title})

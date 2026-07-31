@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -57,6 +58,37 @@ class OpenAILLM:
                     yield text
         except APITimeoutError as exc:
             raise TimeoutError from exc
+
+    def select_tool(
+        self,
+        system: str,
+        user: str,
+        tools: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Use the provider's native function calling for one optional tool."""
+        self._call_count += 1
+        try:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                tools=tools,
+                tool_choice="auto",
+                temperature=0,
+            )
+        except APITimeoutError as exc:
+            raise TimeoutError from exc
+        calls = response.choices[0].message.tool_calls or []
+        if not calls:
+            return None
+        call = calls[0]
+        try:
+            arguments = json.loads(call.function.arguments or "{}")
+        except json.JSONDecodeError:
+            arguments = {}
+        return call.function.name, arguments if isinstance(arguments, dict) else {}
 
     def _request(
         self,

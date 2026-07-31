@@ -29,11 +29,6 @@ _AGENT_REGISTRY: Final[dict[str, dict]] = {
             "--port",
             "8501",
         ],
-        "legacy_ui_command": [
-            ".venv/bin/streamlit", "run", "amazon_create/ui/app.py",
-            "--server.address", "127.0.0.1", "--server.port", "8601",
-            "--server.headless", "true",
-        ],
     },
     "listing-optimization": {
         "id": "listing-optimization",

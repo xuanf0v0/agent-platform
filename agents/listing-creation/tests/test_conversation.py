@@ -1,781 +1,261 @@
-"""Tests for the rule-assisted, fully conversational creation workflow."""
+"""Tests for the prompt-driven persistent creation conversation."""
 
-from __future__ import annotations
-
-import json
 from pathlib import Path
 
 from amazon_create.config import Settings
-from amazon_create.conversation.graph import initial_graph_state
-from amazon_create.conversation.reasoning import deterministic_candidates
+from amazon_create.conversation.freeform_graph import stream_reply
 from amazon_create.conversation.service import ConversationService
-from amazon_create.schemas.conversation import CandidateStatus, SummaryStatus
-from amazon_create.schemas.workflow import CreationStage
-from streamlit.testing.v1 import AppTest
-
-_COMPLETE_BRIEF = """产品: Mesh Zipper Pouch
-产品 ASIN: B012345678
-站点: US
-语言: en
-产品类型: zipper pouch
-品牌: ACME
-媒体类目: no
-父子体: parent
-材质: polyester
-尺寸: 10 x 8 in
-"""
+from amazon_create.schemas.conversation import (
+    ConfirmedFact,
+    ConversationGraphState,
+    ConversationMessage,
+)
 
 
 def _service(path: Path) -> ConversationService:
     return ConversationService(Settings(MOCK=True, CHECKPOINT_PATH=path))
 
 
-def _start_workflow(service: ConversationService):
+def test_new_session_has_no_fixed_assistant_message(tmp_path: Path) -> None:
+    service = _service(tmp_path / "empty.sqlite3")
     snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    snapshot = service.send_message(thread_id, _COMPLETE_BRIEF)
-    return service.send_message(thread_id, "确认")
+
+    assert snapshot.state.messages == []
+    assert snapshot.state.schema_version == 3
 
 
-def test_long_brief_produces_one_fact_summary_without_interrupt(tmp_path: Path) -> None:
-    service = _service(tmp_path / "conversation.sqlite3")
+def test_every_user_message_is_answered_by_the_llm(tmp_path: Path) -> None:
+    service = _service(tmp_path / "chat.sqlite3")
     snapshot = service.create_session()
-    snapshot = service.send_message(snapshot.state.thread_id, _COMPLETE_BRIEF)
 
-    assert snapshot.interrupt is None
-    assert snapshot.state.phase == "fact_summary"
-    assert snapshot.state.fact_summary_status == SummaryStatus.AWAITING_CONFIRMATION
-    assert snapshot.state.confirmed_candidates() == []
-    assert "产品事实摘要" in snapshot.state.messages[-1].content
-    values = {item.key: item.value for item in snapshot.state.summary_facts()}
-    assert values["product_asin"] == "B012345678"
-    assert values["marketplace"] == "US"
-    assert values["material"] == "polyester"
+    snapshot = service.send_message(snapshot.state.thread_id, "你需要哪些东西")
+
+    assert snapshot.state.messages[-2].role == "user"
+    assert snapshot.state.messages[-1].role == "assistant"
+    assert snapshot.state.messages[-1].content == "我理解你的意思：你需要哪些东西"
+    assert "candidates" not in snapshot.state.model_dump()
+    assert snapshot.state.confirmed_facts == []
 
 
-def test_one_chat_confirmation_confirms_all_sourced_facts(tmp_path: Path) -> None:
-    service = _service(tmp_path / "confirm.sqlite3")
-    snapshot = _start_workflow(service)
-
-    confirmed = {item.key: item for item in snapshot.state.confirmed_candidates()}
-    assert snapshot.interrupt is None
-    assert snapshot.state.phase == "workflow"
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-    assert snapshot.state.current_block_id == "audience:1"
-    assert {"product_asin", "marketplace", "material", "size"}.issubset(confirmed)
-    assert all(item.is_confirmed_current for item in confirmed.values())
-    assert snapshot.state.creation_session.artifact(CreationStage.BRIEF).approved
-
-
-def test_missing_identity_fields_are_asked_together_in_chat(tmp_path: Path) -> None:
-    service = _service(tmp_path / "missing.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    snapshot = service.send_message(thread_id, "产品 ASIN: B012345678\n站点: US")
-    snapshot = service.send_message(thread_id, "确认")
-
-    assert snapshot.state.phase == "facts"
-    assert {"product_name", "product_type", "brand"}.issubset(
-        snapshot.state.pending_question_keys
-    )
-    reply = snapshot.state.messages[-1].content
-    assert "请在一条消息中尽量补齐" in reply
-    assert "产品名称" in reply
-    assert "品牌" in reply
-
-
-def test_short_marketplace_answer_updates_current_fact_without_repeating_summary(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "short-marketplace.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    snapshot = service.send_message(
-        thread_id,
-        "产品：Wall File Organizer\n产品类型：Hanging Wall Files\n品牌：generic",
-    )
-
-    snapshot = service.send_message(thread_id, "us")
-
-    values = {item.key: item.value for item in snapshot.state.candidates}
-    assert values["marketplace"] == "US"
-    assert values["language"] == "en"
-    reply = snapshot.state.messages[-1].content
-    assert "已记录 目标站点：US、目标语言：en" in reply
-    assert "产品事实摘要" not in reply
-
-
-def test_sellersprite_pipe_rows_extract_target_product_without_placeholder_facts(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "sellersprite-pipe.sqlite3")
-    snapshot = service.create_session()
-    source = """细分类目
-Hanging Wall Files|SellerSprite,US,ASIN详情|
-目标子体|Black / 5 Tier / Item|SellerSprite, B0DSM0RXZK|
-当前价格|$17.88|SellerSprite 快照|
-产品尺寸|待确认|
-流量结构|自然80.60%,广告19.40%|SIF|
-"""
-
-    snapshot = service.send_message(snapshot.state.thread_id, source)
-
-    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
-    assert values["product_type"] == "Hanging Wall Files"
-    assert values["product_asin"] == "B0DSM0RXZK"
-    assert values["listing_scope"] == "child"
-    assert values["color"] == "Black"
-    assert values["tier_count"] == "5 Tier"
-    assert values["traffic_mix"] == "自然80.60%,广告19.40%"
-    assert "待确认" not in values.values()
-
-
-def test_multiline_field_update_is_not_misread_as_one_short_answer(tmp_path: Path) -> None:
-    service = _service(tmp_path / "multiline-intake.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    service.send_message(thread_id, "产品 ASIN：B0DSM0RXZK\n站点：US")
-
-    snapshot = service.send_message(
-        thread_id,
-        "品牌：generic\n材质：metal\n包装内容：wall file organizer and mounting hardware",
-    )
-
-    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
-    assert values["brand"] == "generic"
-    assert values["material"] == "metal"
-    assert values["package_contents"] == "wall file organizer and mounting hardware"
-    assert not values.get("product_name", "")
-
-
-def test_sellersprite_intake_dialogue_reaches_audience_after_confirmations(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "sellersprite-dialogue.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-
-    snapshot = service.send_message(
-        thread_id,
-        "细分类目\nHanging Wall Files|SellerSprite,US|\n"
-        "目标子体|Black / 5 Tier / Item|SellerSprite, B0DSM0RXZK|",
-    )
-    assert not {item.key: item.value for item in snapshot.state.candidates if item.value}.get(
-        "marketplace"
-    )
-
-    snapshot = service.send_message(thread_id, "us")
-    assert "已记录 目标站点：US、目标语言：en" in snapshot.state.messages[-1].content
-
-    snapshot = service.send_message(
-        thread_id,
-        "产品名称：5 Tier Wall File Organizer\n品牌：generic\n材质：metal\n"
-        "包装内容：5层文件架，安装五金件\n安装方式：壁挂",
-    )
-    snapshot = service.send_message(thread_id, "确认")
-    assert snapshot.state.phase == "facts"
-    assert "另外仍待确认的产品参数：尺寸" in snapshot.state.messages[-1].content
-
-    snapshot = service.send_message(thread_id, "媒体类目：no\n尺寸：15 x 4 x 20 in")
-    snapshot = service.send_message(thread_id, "确认")
-
-    assert snapshot.state.phase == "workflow"
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-    assert snapshot.state.current_block_id == "audience:1"
-
-
-def test_bare_asin_answer_is_mapped_to_the_active_asin_question(tmp_path: Path) -> None:
-    service = _service(tmp_path / "bare-asin.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    service.send_message(
-        thread_id,
-        "产品：Wall File Organizer\n站点：US\n产品类型：Hanging Wall Files\n品牌：generic",
-    )
-
-    snapshot = service.send_message(thread_id, "B0DSM0RXZK")
-
-    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
-    assert values["product_asin"] == "B0DSM0RXZK"
-    assert "已记录 产品 ASIN：B0DSM0RXZK" in snapshot.state.messages[-1].content
-
-
-def test_explicit_marketplace_correction_updates_the_derived_language(tmp_path: Path) -> None:
-    service = _service(tmp_path / "marketplace-correction.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    service.send_message(
-        thread_id,
-        "产品：Wall File Organizer\n站点：US\n产品类型：Hanging Wall Files\n品牌：generic",
-    )
-
-    snapshot = service.send_message(thread_id, "站点：CA")
-
-    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
-    assert values["marketplace"] == "CA"
-    assert values["language"] == "en-CA"
-    assert "产品事实摘要" in snapshot.state.messages[-1].content
-
-
-def test_unknown_short_answer_does_not_become_an_identity_fact(tmp_path: Path) -> None:
-    service = _service(tmp_path / "unknown-answer.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    service.send_message(thread_id, "产品 ASIN：B0DSM0RXZK\n站点：US")
-
-    snapshot = service.send_message(thread_id, "不知道")
-
-    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
-    assert not values.get("product_name", "")
-    reply = snapshot.state.messages[-1].content
-    assert "不能写入“未知”或猜测值" in reply
-    assert "产品事实摘要" not in reply
-
-
-def test_complete_english_brief_starts_the_workflow_after_one_confirmation(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "english-intake.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    snapshot = service.send_message(
-        thread_id,
-        "Product Name: Wall File Organizer\nProduct ASIN: B0DSM0RXZK\n"
-        "Marketplace: US\nProduct Type: Hanging Wall Files\nBrand: generic\n"
-        "Media Category: no\nListing Scope: child\nMaterial: metal\n"
-        "Size: 15 x 4 x 20 in",
-    )
-    snapshot = service.send_message(thread_id, "confirm")
-
-    assert snapshot.state.phase == "workflow"
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-
-
-def test_natural_sentence_for_marketplace_is_resolved_only_in_intake_context(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "natural-marketplace.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    service.send_message(
-        thread_id,
-        "产品名称：Wall File Organizer\n产品类型：Hanging Wall Files\n品牌：generic",
-    )
-
-    snapshot = service.send_message(thread_id, "这个产品做美国站")
-
-    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
-    assert values["marketplace"] == "US"
-    assert values["language"] == "en"
-    assert "产品事实摘要" not in snapshot.state.messages[-1].content
-
-
-def test_free_form_natural_product_sentence_extracts_explicit_attributes(tmp_path: Path) -> None:
-    service = _service(tmp_path / "free-form-intake.sqlite3")
+def test_explicit_user_product_facts_are_extracted_for_sidebar(tmp_path: Path) -> None:
+    service = _service(tmp_path / "facts.sqlite3")
     snapshot = service.create_session()
 
     snapshot = service.send_message(
         snapshot.state.thread_id,
-        "我有一个壁挂文件架，品牌是 generic，材质是 metal，尺寸 15 x 4 x 20 in，"
-        "类目是 Hanging Wall Files",
+        "产品 ASIN：B0G4QSF8KV\n站点：US\n材质：Memory Foam\n产品尺寸：16x15x3 inches",
     )
 
-    values = {item.key: item.value for item in snapshot.state.candidates if item.value}
-    assert values["brand"] == "generic"
-    assert values["material"] == "metal"
-    assert values["size"] == "15 x 4 x 20 in"
-    assert values["product_type"] == "Hanging Wall Files"
-    assert not values.get("marketplace", "")
+    values = {fact.key: fact.value for fact in snapshot.state.confirmed_facts}
+    assert values == {
+        "asin": "B0G4QSF8KV",
+        "marketplace": "US",
+        "material": "Memory Foam",
+        "size": "16x15x3 inches",
+    }
 
 
-def test_natural_asin_media_scope_and_confirmation_dialogue(tmp_path: Path) -> None:
-    service = _service(tmp_path / "natural-dialogue.sqlite3")
+def test_workflow_instructions_are_not_extracted_as_product_facts(tmp_path: Path) -> None:
+    service = _service(tmp_path / "instructions.sqlite3")
     snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    service.send_message(
-        thread_id,
-        "产品名称：Wall File Organizer\n站点：US\n产品类型：Hanging Wall Files\n"
-        "品牌：generic\n材质：metal\n尺寸：15 x 4 x 20 in",
-    )
-
-    snapshot = service.send_message(thread_id, "ASIN 是 B0DSM0RXZK")
-    assert "产品 ASIN：B0DSM0RXZK" in snapshot.state.messages[-1].content
-    snapshot = service.send_message(thread_id, "这个产品不是媒体类目")
-    assert "是否 Media 类目：no" in snapshot.state.messages[-1].content
-    snapshot = service.send_message(thread_id, "这次做子体")
-    assert "父体/子体范围：child" in snapshot.state.messages[-1].content
-
-    snapshot = service.send_message(thread_id, "好的，以上都没问题，请继续")
-
-    assert snapshot.state.phase == "workflow"
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-
-
-def test_all_natural_language_intake_reaches_market_research(tmp_path: Path) -> None:
-    service = _service(tmp_path / "all-natural-dialogue.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-
-    turns = (
-        "我有一个壁挂文件架，品牌是 generic，材质 metal，尺寸 15 x 4 x 20 in，类目是 Hanging Wall Files",
-        "这个产品卖美国站",
-        "ASIN 是 B0DSM0RXZK",
-        "它不是媒体类目",
-        "这次做子体",
-        "产品名称是 5 Tier Wall File Organizer",
-        "好的，以上都没问题，请继续",
-    )
-    for turn in turns:
-        snapshot = service.send_message(thread_id, turn)
-
-    assert snapshot.state.phase == "workflow"
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-    values = {item.key: item.value for item in snapshot.state.confirmed_candidates()}
-    assert values["product_name"] == "5 Tier Wall File Organizer"
-    assert values["marketplace"] == "US"
-    assert values["listing_scope"] == "child"
-
-
-def test_unstructured_long_prompt_extracts_all_atomic_facts(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    atomic = [f"fact value {index}" for index in range(40)]
-    prompt = (
-        "Create a listing for the Mesh Travel Pouch by ACME for the US marketplace in English. "
-        "It is a non-media parent listing. Product category is zipper pouch. "
-        + " ".join(atomic)
-    )
-    facts = [
-        {
-            "key": "product_name",
-            "label_zh": "产品名称",
-            "value": "Mesh Travel Pouch",
-            "group": "基础信息",
-            "required": True,
-            "question_zh": "确认产品名称",
-            "rationale_zh": "source",
-            "source_quote": "Mesh Travel Pouch",
-        },
-        {
-            "key": "marketplace",
-            "label_zh": "目标站点",
-            "value": "US",
-            "group": "基础信息",
-            "required": True,
-            "question_zh": "确认站点",
-            "rationale_zh": "source",
-            "source_quote": "US marketplace",
-        },
-        {
-            "key": "language",
-            "label_zh": "目标语言",
-            "value": "English",
-            "group": "基础信息",
-            "required": True,
-            "question_zh": "确认语言",
-            "rationale_zh": "source",
-            "source_quote": "English",
-        },
-        {
-            "key": "product_type",
-            "label_zh": "产品类型",
-            "value": "zipper pouch",
-            "group": "基础信息",
-            "required": True,
-            "question_zh": "确认类目",
-            "rationale_zh": "source",
-            "source_quote": "zipper pouch",
-        },
-        {
-            "key": "brand",
-            "label_zh": "品牌",
-            "value": "ACME",
-            "group": "基础信息",
-            "required": True,
-            "question_zh": "确认品牌",
-            "rationale_zh": "source",
-            "source_quote": "ACME",
-        },
-        {
-            "key": "media_category",
-            "label_zh": "Media",
-            "value": "non-media",
-            "group": "合规范围",
-            "required": True,
-            "question_zh": "确认 media",
-            "rationale_zh": "source",
-            "source_quote": "non-media",
-        },
-        {
-            "key": "listing_scope",
-            "label_zh": "范围",
-            "value": "parent",
-            "group": "合规范围",
-            "required": True,
-            "question_zh": "确认范围",
-            "rationale_zh": "source",
-            "source_quote": "parent listing",
-        },
-    ]
-    facts.extend(
-        {
-            "key": f"feature_{index}",
-            "label_zh": f"事实 {index}",
-            "value": value,
-            "group": "规格参数",
-            "required": True,
-            "question_zh": f"确认事实 {index}",
-            "rationale_zh": "source",
-            "source_quote": value,
-        }
-        for index, value in enumerate(atomic)
-    )
-
-    class FactLLM:
-        def complete(self, _system: str, _user: str, **_kwargs: object) -> str:
-            return json.dumps({"facts": facts})
-
-    monkeypatch.setattr(
-        "amazon_create.conversation.reasoning.get_llm",
-        lambda *_args, **_kwargs: FactLLM(),
-    )
-    service = _service(tmp_path / "long-prompt.sqlite3")
-    snapshot = service.create_session()
-    snapshot = service.send_message(snapshot.state.thread_id, prompt)
-
-    values = {item.key: item.value for item in snapshot.state.candidates}
-    assert values["product_name"] == "Mesh Travel Pouch"
-    assert values["marketplace"] == "US"
-    assert values["listing_scope"] == "parent"
-    assert len([key for key in values if key.startswith("feature_")]) == 40
-    assert snapshot.state.fact_summary_status == SummaryStatus.AWAITING_CONFIRMATION
-    assert snapshot.interrupt is None
-
-
-def test_chat_confirmations_advance_discussion_blocks_and_stages(tmp_path: Path) -> None:
-    service = _service(tmp_path / "blocks.sqlite3")
-    snapshot = _start_workflow(service)
-    thread_id = snapshot.state.thread_id
-
-    expected_audience_blocks = ["audience:1", "audience:2", "audience:3", "audience:4"]
-    assert snapshot.state.current_block_id == expected_audience_blocks[0]
-    for expected in expected_audience_blocks[1:]:
-        snapshot = service.send_message(thread_id, "确认")
-        assert snapshot.state.current_block_id == expected
-
-    snapshot = service.send_message(thread_id, "确认")
-    assert snapshot.state.creation_session.stage == CreationStage.PRODUCT
-    assert snapshot.state.current_block_id == "product:1"
-    assert all(
-        item.status.value == "confirmed"
-        for item in snapshot.state.discussion_blocks
-        if item.stage == CreationStage.AUDIENCE.value
-    )
-
-
-def test_full_conversation_keeps_keywords_and_twenty_section_final_report(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "complete.sqlite3")
-    snapshot = _start_workflow(service)
-    thread_id = snapshot.state.thread_id
-    visited: list[tuple[CreationStage, str]] = []
-
-    for _ in range(24):
-        visited.append((snapshot.state.creation_session.stage, snapshot.state.current_block_id))
-        if snapshot.state.phase == "completed":
-            break
-        snapshot = service.send_message(thread_id, "确认")
-
-    stages = [stage for stage, _block in visited]
-    deliverable = snapshot.state.creation_session.deliverable
-    assert CreationStage.KEYWORDS in stages
-    assert (CreationStage.KEYWORDS, "keywords:1") in visited
-    assert (CreationStage.KEYWORDS, "keywords:2") in visited
-    assert CreationStage.FINAL_COPY in stages
-    assert snapshot.state.phase == "completed"
-    assert snapshot.state.creation_session.stage == CreationStage.COMPLETED
-    assert deliverable is not None
-    assert len(deliverable.final_report) == 20
-    assert "二十、可直接上传的最终版本" in deliverable.final_report
-    assert deliverable.title
-    assert len(deliverable.bullets) == 5
-
-
-def test_stage_feedback_regenerates_stage_without_mutating_product_facts(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "feedback.sqlite3")
-    snapshot = _start_workflow(service)
-    thread_id = snapshot.state.thread_id
-    before = [(item.key, item.value, item.revision) for item in snapshot.state.candidates]
 
     snapshot = service.send_message(
-        thread_id,
-        "核心受众应优先考虑小型办公室采购者，请重新整理这一块",
+        snapshot.state.thread_id,
+        "首先让用户提供产品ASIN和站点，所有产品事实必须以用户资料为准。",
     )
 
-    after = [(item.key, item.value, item.revision) for item in snapshot.state.candidates]
-    assert after == before
-    assert snapshot.state.phase == "workflow"
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-    assert snapshot.state.current_block_id == "audience:1"
-    assert "阶段修改意见" in snapshot.state.creation_session.brief.notes
+    assert snapshot.state.confirmed_facts == []
 
 
-def test_fact_revision_restarts_only_the_earliest_dependent_stage(tmp_path: Path) -> None:
-    service = _service(tmp_path / "revision.sqlite3")
-    snapshot = _start_workflow(service)
-    thread_id = snapshot.state.thread_id
-    for _ in range(4):
-        snapshot = service.send_message(thread_id, "确认")
-    assert snapshot.state.creation_session.stage == CreationStage.PRODUCT
-    old_audience = snapshot.state.creation_session.artifact(CreationStage.AUDIENCE)
-
-    snapshot = service.send_message(thread_id, "材质: nylon")
-    assert snapshot.state.phase == "fact_summary"
-    assert snapshot.state.downstream_stale
-    assert snapshot.state.restart_stage == CreationStage.PRODUCT.value
-    material = next(item for item in snapshot.state.candidates if item.key == "material")
-    assert material.value == "nylon"
-    assert material.status == CandidateStatus.PENDING
-
-    snapshot = service.send_message(thread_id, "确认")
-    material = next(item for item in snapshot.state.confirmed_candidates() if item.key == "material")
-    assert material.value == "nylon"
-    assert snapshot.state.creation_session.stage == CreationStage.PRODUCT
-    assert snapshot.state.current_block_id == "product:1"
-    assert snapshot.state.creation_session.artifact(CreationStage.AUDIENCE) == old_audience
-    assert snapshot.state.creation_session.artifact(CreationStage.AUDIENCE).approved
-    assert not snapshot.state.downstream_stale
-    assert snapshot.state.restart_stage == ""
-
-
-def test_research_starts_only_when_the_first_relevant_stage_opens(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    calls: list[dict[str, object]] = []
-
-    def fake_research(_settings, **kwargs):
-        calls.append(kwargs)
-        return {
-            "mode": "live",
-            "marketplace": kwargs["marketplace"],
-            "allowed_keywords": [],
-            "market_metrics": [],
-            "cited_evidence": [],
-            "asin_research": [],
-            "category_research": {},
-            "gaps": [],
-        }
-
-    monkeypatch.setattr("amazon_create.conversation.react.load_research_context", fake_research)
-    monkeypatch.setattr(
-        "amazon_create.conversation.react.load_asin_research_context",
-        lambda _settings, *, asin, marketplace: {
-            "mode": "live",
-            "asin": asin,
-            "marketplace": marketplace,
-            "product_attributes": [],
-            "gaps": [],
-        },
-    )
-    service = _service(tmp_path / "research.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    snapshot = service.send_message(thread_id, _COMPLETE_BRIEF)
-    assert calls == []
-
-    snapshot = service.send_message(thread_id, "确认")
-    assert len(calls) == 1
-    assert calls[0]["product_name"] == "Mesh Zipper Pouch"
-    assert calls[0]["marketplace"] == "US"
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-    assert snapshot.state.research_activity
-    turn = snapshot.state.react_turns[-1]
-    assert [action.tool.value for action in turn.actions] == [
-        "market_research",
-        "asin_research",
-    ]
-    assert all("Thought" not in observation.summary_zh for observation in turn.observations)
-
-
-def test_react_rejects_unapproved_model_tool_and_keeps_stage_gate(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    class UnsafePlanner:
-        def complete(self, _system: str, _user: str, **_kwargs: object) -> str:
-            return '{"actions":[{"tool":"delete_database"},{"tool":"continue"}]}'
-
-    monkeypatch.setattr(
-        "amazon_create.conversation.react.get_llm",
-        lambda *_args, **_kwargs: UnsafePlanner(),
-    )
-    calls: list[dict[str, object]] = []
-
-    def fake_research(_settings, **kwargs):
-        calls.append(kwargs)
-        return {
-            "mode": "live",
-            "marketplace": kwargs["marketplace"],
-            "allowed_keywords": [],
-            "market_metrics": [],
-            "cited_evidence": [],
-            "asin_research": [],
-            "category_research": {},
-            "gaps": [],
-        }
-
-    monkeypatch.setattr("amazon_create.conversation.react.load_research_context", fake_research)
-    monkeypatch.setattr(
-        "amazon_create.conversation.react.load_asin_research_context",
-        lambda *_settings, **_kwargs: {"mode": "unavailable", "product_attributes": []},
-    )
-    service = _service(tmp_path / "react-whitelist.sqlite3")
-    snapshot = _start_workflow(service)
-
-    assert snapshot.state.creation_session.stage == CreationStage.AUDIENCE
-    assert snapshot.state.current_block_id == "audience:1"
-    assert calls
-    assert {item.tool.value for item in snapshot.state.react_turns[-1].actions} == {
-        "market_research",
-        "asin_research",
-    }
-    assert all(
-        item.tool.value in {"market_research", "asin_research", "continue"}
-        for item in snapshot.state.react_turns[-1].actions
-    )
-
-
-def test_stream_message_persists_only_complete_messages(tmp_path: Path) -> None:
+def test_pending_message_is_visible_before_llm_processing(tmp_path: Path) -> None:
     service = _service(tmp_path / "stream.sqlite3")
     snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    before_count = len(snapshot.state.messages)
+    snapshot = service.enqueue_message(snapshot.state.thread_id, "根据 ASIN 提取")
 
-    snapshot, chunks = service.stream_message(thread_id, _COMPLETE_BRIEF, chunk_chars=17)
-    rendered = "".join(chunks)
-    new_messages = snapshot.state.messages[before_count:]
-    assistant = [item.content for item in new_messages if item.role == "assistant"]
+    assert snapshot.state.pending_user_message == "根据 ASIN 提取"
+    assert snapshot.state.messages[-1].role == "user"
 
-    assert rendered == "\n\n".join(assistant)
-    assert new_messages
-    assert all(item.status == "complete" for item in new_messages)
-    assert all(item.status != "streaming" for item in service.snapshot(thread_id).state.messages)
+    events = list(service.stream_pending_turn(snapshot.state.thread_id))
+    rendered = "".join(event.content for event in events if event.kind == "text")
+
+    assert rendered == "我理解你的意思：根据 ASIN 提取"
+    assert service.snapshot(snapshot.state.thread_id).state.pending_user_message == ""
 
 
-def test_stream_turn_emits_progress_before_complete_reply(tmp_path: Path) -> None:
-    service = _service(tmp_path / "stream-turn.sqlite3")
-    snapshot = service.create_session()
-
-    events = list(service.stream_turn(snapshot.state.thread_id, _COMPLETE_BRIEF, chunk_chars=17))
-
-    assert events[0].kind == "status"
-    assert "已收到消息" in events[0].content
-    assert any(event.kind == "status" for event in events)
-    assert len([event for event in events if event.kind == "text"]) > 1
-    assert events[-1].kind == "done"
-    persisted = service.snapshot(snapshot.state.thread_id)
-    assert persisted.state.messages[-1].role == "assistant"
-    assert persisted.state.messages[-1].status == "complete"
-
-
-def test_enqueued_user_message_is_visible_before_agent_processing(tmp_path: Path) -> None:
-    service = _service(tmp_path / "queued-message.sqlite3")
+def test_conversation_history_is_persisted(tmp_path: Path) -> None:
+    service = _service(tmp_path / "history.sqlite3")
     snapshot = service.create_session()
     thread_id = snapshot.state.thread_id
-    before_count = len(snapshot.state.messages)
+    service.send_message(thread_id, "第一轮")
+    service.send_message(thread_id, "第二轮")
 
-    queued = service.enqueue_message(thread_id, "无论内容是什么，都先显示用户气泡")
+    restored = service.snapshot(thread_id)
 
-    assert queued.state.pending_user_message == "无论内容是什么，都先显示用户气泡"
-    assert len(queued.state.messages) == before_count + 1
-    assert queued.state.messages[-1].role == "user"
-    assert queued.state.messages[-1].content == "无论内容是什么，都先显示用户气泡"
-
-
-def test_pending_user_message_streams_reply_without_duplicate_user_bubble(
-    tmp_path: Path,
-) -> None:
-    service = _service(tmp_path / "pending-stream.sqlite3")
-    snapshot = service.create_session()
-    thread_id = snapshot.state.thread_id
-    service.enqueue_message(thread_id, "产品：Wall File Organizer\n站点：US")
-
-    events = list(service.stream_pending_turn(thread_id, chunk_chars=17))
-    completed = service.snapshot(thread_id)
-    user_messages = [item for item in completed.state.messages if item.role == "user"]
-
-    assert events[0].kind == "status"
-    assert any(event.kind == "text" for event in events)
-    assert events[-1].kind == "done"
-    assert completed.state.pending_user_message == ""
-    assert len(user_messages) == 1
+    assert [message.role for message in restored.state.messages] == [
+        "user", "assistant", "user", "assistant"
+    ]
+    assert restored.state.messages[-1].content == "我理解你的意思：第二轮"
 
 
-def test_legacy_conversation_is_read_only(tmp_path: Path) -> None:
+def test_v2_session_payload_continues_as_freeform_chat(tmp_path: Path) -> None:
     service = _service(tmp_path / "legacy.sqlite3")
-    legacy = initial_graph_state("legacy-thread")
-    legacy.schema_version = 1
-    service._graph.invoke(
-        {"data": legacy.model_dump(mode="json"), "action": {"type": "start"}},
-        service._config(legacy.thread_id),
+    snapshot = service.create_session()
+    thread_id = snapshot.state.thread_id
+    with service._lock:
+        service._graph.invoke(
+            {
+                "data": {
+                    "thread_id": thread_id,
+                    "schema_version": 2,
+                    "title": "旧会话",
+                    "phase": "fact_summary",
+                    "messages": [{"role": "user", "content": "旧资料"}],
+                    "candidates": [{"key": "material", "value": "steel"}],
+                },
+                "action": {"type": "start"},
+            },
+            service._config(thread_id),
+        )
+
+    continued = service.send_message(thread_id, "直接自然回答我")
+
+    assert continued.state.schema_version == 2
+    assert [message.role for message in continued.state.messages[-2:]] == ["user", "assistant"]
+    assert continued.state.messages[-1].content == "我理解你的意思：直接自然回答我"
+    assert continued.state.model_dump().keys() == {
+        "thread_id",
+        "schema_version",
+        "title",
+        "messages",
+        "confirmed_facts",
+        "pending_user_message",
+        "error",
+    }
+
+
+class _ToolSelectingLLM:
+    def __init__(self, selection: tuple[str, dict] | None = None) -> None:
+        self.selection = selection
+        self.received_user = ""
+        self.received_system = ""
+
+    @property
+    def call_count(self) -> int:
+        return 0
+
+    def complete(self, system: str, user: str, **kwargs: object) -> str:
+        self.received_system = system
+        self.received_user = user
+        return "自然回复"
+
+    def stream(self, system: str, user: str, **kwargs: object):
+        self.received_system = system
+        self.received_user = user
+        yield "自然"
+        yield "回复"
+
+    def select_tool(self, system: str, user: str, tools: list[dict]):
+        self.received_system = system
+        self.received_user = user
+        return self.selection
+
+
+def test_model_selected_asin_tool_result_reaches_streaming_writer(monkeypatch) -> None:
+    selector = _ToolSelectingLLM(("asin_research", {"asin": "B08N5WRWNW", "marketplace": "US"}))
+    writer = _ToolSelectingLLM()
+    monkeypatch.setattr(
+        "amazon_create.conversation.freeform_graph.get_llm",
+        lambda _settings, role: selector if role == "review" else writer,
     )
-    before = service.snapshot(legacy.thread_id)
-
-    after = service.send_message(legacy.thread_id, _COMPLETE_BRIEF)
-
-    assert after.state.is_legacy
-    assert after.state.messages == before.state.messages
-    assert after.state.phase == before.state.phase
-
-
-def test_streamlit_page_uses_chat_as_the_only_business_control(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("CHECKPOINT_PATH", str(tmp_path / "ui.sqlite3"))
-    monkeypatch.setenv("MOCK", "true")
-    app_path = Path(__file__).parents[1] / "amazon_create" / "ui" / "app.py"
-    app = AppTest.from_file(str(app_path), default_timeout=30)
-    app.run()
-
-    assert not app.exception
-    markdown = "\n".join(item.value for item in app.markdown)
-    assert "对话式 Listing 创作 Agent" in markdown
-    assert "已确认事实" in markdown
-    assert len(app.chat_input) == 1
-    assert "确认事实" not in {button.label for button in app.button}
-
-    app.chat_input[0].set_value(_COMPLETE_BRIEF).run()
-    markdown = "\n".join(item.value for item in app.markdown)
-    assert "产品事实摘要" in markdown
-
-    app.chat_input[0].set_value("确认").run()
-    rendered = "\n".join(
-        [*(item.value for item in app.markdown), *(item.value for item in app.caption)]
+    monkeypatch.setattr(
+        "amazon_create.conversation.freeform_graph.load_asin_research_context",
+        lambda _settings, **kwargs: {"mode": "live", "title": "Echo Dot", **kwargs},
     )
-    assert not app.exception
-    assert "类目市场概况" in rendered
-    assert "产品 ASIN" in rendered
-    assert "B012345678" in rendered
-    assert "ReAct 研究记录" in rendered
+    state = ConversationGraphState(
+        thread_id="asin-tool",
+        messages=[ConversationMessage(role="user", content="查询 B08N5WRWNW 美国站")],
+    )
+
+    rendered = "".join(stream_reply(state, Settings(MOCK=True)))
+
+    assert rendered == "自然回复"
+    assert "明确 Amazon ASIN" in selector.received_system
+    assert "CONVERSATION" in selector.received_user
+    assert '"tool": "asin_research"' in writer.received_user
+    assert '"title": "Echo Dot"' in writer.received_user
 
 
-def test_sellersprite_report_does_not_infer_marketplace_or_product_asin() -> None:
-    report = """细分类目
-Hanging Wall Files | SellerSprite,US,ASIN详情|
-目标子体|Black / 5 Tier / Item | SellerSprite, BODSMRXZKKI
-当前价格|$17.88 SellerSprite ASIN详情,2026-07-27快照|
-核心市场词|'wall file organizer'|SIF关键词信号|
-核心词市场估算量|约32,700/月|SIF关键词竞争,市场口径|
-"""
+def test_asin_research_context_keeps_existing_and_current_product_facts(monkeypatch) -> None:
+    selector = _ToolSelectingLLM(
+        ("asin_research", {"asin": "B0G4QSF8KV", "marketplace": "US"})
+    )
+    writer = _ToolSelectingLLM()
+    monkeypatch.setattr(
+        "amazon_create.conversation.freeform_graph.get_llm",
+        lambda _settings, role: selector if role == "review" else writer,
+    )
+    monkeypatch.setattr(
+        "amazon_create.conversation.freeform_graph.load_asin_research_context",
+        lambda _settings, **kwargs: {
+            "mode": "live",
+            "product_attributes": [
+                {"key": "title", "value": "Ergonomic Seat Cushion"},
+                {"key": "brand", "value": "ErgoNest"},
+            ],
+            **kwargs,
+        },
+    )
+    state = ConversationGraphState(
+        thread_id="asin-full-context",
+        confirmed_facts=[
+            ConfirmedFact(
+                key="material",
+                label="材质",
+                value="Memory Foam",
+                group="规格参数",
+                source_quote="材质是 Memory Foam",
+            )
+        ],
+        messages=[
+            ConversationMessage(role="user", content="材质是 Memory Foam"),
+            ConversationMessage(role="assistant", content="还需要 ASIN 和站点。"),
+            ConversationMessage(
+                role="user",
+                content="ASIN B0G4QSF8KV，美国站，尺寸是 18 x 14 x 3 inches。",
+            ),
+        ],
+    )
 
-    values = {item.key: item.value for item in deterministic_candidates(report)}
+    rendered = "".join(stream_reply(state, Settings(MOCK=True)))
 
-    assert "marketplace" not in values
-    assert "product_asin" not in values
-    assert "wall file organizer" in report
+    assert rendered == "自然回复"
+    assert "Memory Foam" in writer.received_user
+    assert "18 x 14 x 3 inches" in writer.received_user
+    assert "Ergonomic Seat Cushion" in writer.received_user
+    assert "用户已确认事实、MCP 待确认候选、尚待补充信息" in writer.received_user
+    assert "不得只输出 MCP 查询事实" in writer.received_user
+
+
+def test_model_selected_market_tool_result_reaches_streaming_writer(monkeypatch) -> None:
+    selector = _ToolSelectingLLM(
+        ("market_research", {"product_name": "seat cushion", "marketplace": "US", "specs": "memory foam"})
+    )
+    writer = _ToolSelectingLLM()
+    monkeypatch.setattr(
+        "amazon_create.conversation.freeform_graph.get_llm",
+        lambda _settings, role: selector if role == "review" else writer,
+    )
+    monkeypatch.setattr(
+        "amazon_create.conversation.freeform_graph.load_research_context",
+        lambda _settings, **kwargs: {"mode": "live", "keywords": ["office chair cushion"], **kwargs},
+    )
+    state = ConversationGraphState(
+        thread_id="market-tool",
+        messages=[ConversationMessage(role="user", content="研究美国坐垫市场")],
+    )
+
+    rendered = "".join(stream_reply(state, Settings(MOCK=True)))
+
+    assert rendered == "自然回复"
+    assert '"tool": "market_research"' in writer.received_user
+    assert "office chair cushion" in writer.received_user

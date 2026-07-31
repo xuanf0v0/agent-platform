@@ -17,16 +17,23 @@ async function send() {
   } catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
   finally { sending.value = false; status.value = '' }
 }
-async function factAction(fact: any, action: 'confirm' | 'revise') { const id = snapshot.value.state.thread_id; if (action === 'revise') { const value = prompt(`修改 ${fact.label_zh}`, fact.value); if (value === null) return; snapshot.value = await api.service('listing-creation', `sessions/${id}/facts/${fact.fact_id}`, { method: 'PUT', body: JSON.stringify({ value }) }) } else snapshot.value = await api.service('listing-creation', `sessions/${id}/facts/${fact.fact_id}/confirm`, { method: 'POST' }) }
 onMounted(async () => { await loadSessions(); if (!sessions.value.length) await createSession() })
 </script>
 
 <template>
   <section class="page workspace creation-layout">
-    <aside class="side glass-panel"><div class="side-head"><div><p class="eyebrow">SESSIONS</p><h2>Listing 创作</h2></div><button class="icon-btn" @click="createSession">＋</button></div><button v-for="item in sessions" :key="item.thread_id" class="session" :class="{ selected: snapshot?.state.thread_id === item.thread_id }" @click="loadSession(item.thread_id)">{{ item.title }}</button><div class="facts"><h3>已确认事实</h3><template v-if="snapshot"><div v-for="fact in snapshot.state.candidates" :key="fact.fact_id" class="fact" :class="{ confirmed: fact.status === 'confirmed' || fact.status === 'confirmed_missing' }"><button @click="factAction(fact, 'confirm')">{{ fact.status === 'confirmed' || fact.status === 'confirmed_missing' ? '✓' : '○' }}</button><div><b>{{ fact.label_zh }}</b><span>{{ fact.value || '待确认' }}</span></div><button class="edit" @click="factAction(fact, 'revise')">编辑</button></div></template></div></aside>
-    <main class="chat-shell glass-panel"><header class="workspace-head"><div><p class="eyebrow">HUMAN VERIFIED · REACT ASSISTED</p><h1>对话式 Listing 创作 Agent</h1></div><div v-if="snapshot" class="stage-pill">{{ snapshot.state.creation_session?.stage }} · facts v{{ snapshot.state.facts_revision }}</div></header>
+    <aside class="side glass-panel"><div class="side-head"><div><p class="eyebrow">SESSIONS</p><h2>Listing 创作</h2></div><button class="icon-btn" @click="createSession">＋</button></div><button v-for="item in sessions" :key="item.thread_id" class="session" :class="{ selected: snapshot?.state.thread_id === item.thread_id }" @click="loadSession(item.thread_id)">{{ item.title }}</button><div class="facts"><h3>已确认事实 <span v-if="snapshot?.state.confirmed_facts?.length">{{ snapshot.state.confirmed_facts.length }}</span></h3><p v-if="!snapshot?.state.confirmed_facts?.length" class="muted">对话中明确提供或确认的产品事实会显示在这里</p><div v-for="fact in snapshot?.state.confirmed_facts || []" :key="fact.key" class="fact confirmed"><b class="fact-check">✓</b><div><b>{{ fact.label }}</b><span>{{ fact.value }}</span><small>{{ fact.group }}</small></div></div></div></aside>
+    <main class="chat-shell glass-panel"><header class="workspace-head"><div><p class="eyebrow">PROMPT DRIVEN · LLM TOOL USE</p><h1>对话式 Listing 创作 Agent</h1></div><div class="stage-pill">自由对话</div></header>
       <div ref="chat" class="chat"><template v-for="(message, index) in snapshot?.state.messages || []" :key="index"><div class="message" :class="message.role"><span class="avatar">{{ message.role === 'user' ? '你' : 'AI' }}</span><div class="bubble markdown">{{ message.content }}</div></div></template><div v-if="sending" class="message assistant"><span class="avatar">AI</span><div class="bubble markdown"><div v-if="status" class="typing"><i/><i/><i/> {{ status }}</div><template v-else>{{ streamText }}<b class="cursor">▍</b></template></div></div><div v-if="error" class="alert">{{ error }}</div></div>
       <form class="composer" @submit.prevent="send"><textarea v-model="input" placeholder="粘贴完整资料，或回复确认、修改意见和补充信息" @keydown.enter.exact.prevent="send"/><button class="send" :disabled="sending || !input.trim()">发送</button></form>
     </main>
   </section>
 </template>
+
+<style scoped>
+.facts h3 { display: flex; align-items: center; justify-content: space-between; }
+.facts h3 span { min-width: 24px; padding: 2px 7px; border-radius: 12px; background: rgba(67, 223, 252, .1); color: var(--cyan); font: 10px monospace; text-align: center; }
+.fact { grid-template-columns: 22px 1fr; }
+.fact-check { color: #63e6b5; font-size: 13px; }
+.fact small { display: block; color: #456779; font-size: 9px; margin-top: 4px; }
+</style>

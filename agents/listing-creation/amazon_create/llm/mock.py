@@ -22,6 +22,13 @@ class MockLLM:
     def complete(self, system: str, user: str, **kwargs: object) -> str:
         self._call_count += 1
         _ = kwargs
+        if "维护界面侧栏的已确认产品事实" in system:
+            return json.dumps({"facts": _confirmed_facts(user)}, ensure_ascii=False)
+        if "可用工具由以下 JSON 接口提供" in system:
+            return '{"tool":"none","asin":"","marketplace":"","product_name":"","specs":""}'
+        if "完整理解全部会话历史" in system:
+            latest = user.rsplit("USER: ", maxsplit=1)[-1].split("\n\n", maxsplit=1)[0]
+            return f"我理解你的意思：{latest}"
         if "FACT_REASONING_V1" in system:
             return json.dumps(_fact_reasoning_payload(user), ensure_ascii=False)
         payload = _stage_payload(user)
@@ -32,6 +39,45 @@ class MockLLM:
         response = self.complete(system, user, **kwargs)
         for index in range(0, len(response), 48):
             yield response[index : index + 48]
+
+    def select_tool(
+        self,
+        system: str,
+        user: str,
+        tools: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, Any]] | None:
+        _ = (system, user, tools)
+        self._call_count += 1
+        return None
+
+
+def _confirmed_facts(user: str) -> list[dict[str, str]]:
+    conversation = user.split("CONVERSATION:\n", maxsplit=1)[-1].split(
+        "\n\nCURRENT_CONFIRMED_FACTS:", maxsplit=1
+    )[0]
+    patterns = (
+        ("asin", "产品 ASIN", "基础信息", r"(?im)(?:产品\s*)?ASIN\s*[:：=]?\s*([A-Z0-9]{10})\b"),
+        ("marketplace", "目标站点", "基础信息", r"(?im)(?:站点|目标站点)\s*[:：=]\s*([A-Z]{2,3})\b"),
+        ("material", "材质", "规格参数", r"(?im)材质\s*[:：=]\s*([^\n,;，；]+)"),
+        ("size", "产品尺寸", "规格参数", r"(?im)(?:产品)?尺寸\s*[:：=]\s*([^\n,;，；]+)"),
+        ("count", "数量", "包装信息", r"(?im)数量\s*[:：=]\s*([^\n,;，；]+)"),
+    )
+    facts: list[dict[str, str]] = []
+    for key, label, group, pattern in patterns:
+        matches = list(re.finditer(pattern, conversation))
+        if not matches:
+            continue
+        match = matches[-1]
+        facts.append(
+            {
+                "key": key,
+                "label": label,
+                "value": match.group(1).strip(),
+                "group": group,
+                "source_quote": match.group(0).strip(),
+            }
+        )
+    return facts
 
 
 def _fact_reasoning_payload(user: str) -> dict[str, Any]:

@@ -371,6 +371,93 @@ def test_sellersprite_asin_and_keyword_payloads_are_structured() -> None:
     assert values[("market_metric", "wall file organizer:product_count")] == "277"
 
 
+def test_asin_identity_echoes_are_not_effective_product_data(monkeypatch) -> None:
+    from amazon_create.config import Settings
+    from amazon_create.mcp.live_research_types import ResearchBundle, ResearchItem
+    from amazon_create.research_bridge import load_asin_research_context
+
+    bundle = ResearchBundle(
+        items=(
+            ResearchItem(
+                kind="product_attribute",
+                key="asin",
+                value="B0DSM0RXZK",
+                provider="sellersprite",
+                tool="asin_detail",
+            ),
+            ResearchItem(
+                kind="product_attribute",
+                key="marketplace",
+                value="US",
+                provider="sellersprite",
+                tool="asin_detail",
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        "amazon_create.mcp.live_research.fetch_live_mcp_research_sync",
+        lambda *_args, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        "amazon_create.mcp.live_research.research_bundle_from_snapshots",
+        lambda *_args, **_kwargs: bundle,
+    )
+    settings = Settings(MOCK=False, SELLERSPRITE_MCP_KEY="configured")
+
+    result = load_asin_research_context(
+        settings,
+        asin="B0DSM0RXZK",
+        marketplace="US",
+    )
+
+    assert result["mode"] == "degraded"
+    assert "asin_no_effective_product_data" in result["gaps"]
+    assert "无有效商品数据" in result["guidance"]
+
+
+def test_asin_descriptive_attribute_is_effective_product_data(monkeypatch) -> None:
+    from amazon_create.config import Settings
+    from amazon_create.mcp.live_research_types import ResearchBundle, ResearchItem
+    from amazon_create.research_bridge import load_asin_research_context
+
+    bundle = ResearchBundle(
+        items=(
+            ResearchItem(
+                kind="product_attribute",
+                key="asin",
+                value="B08N5WRWNW",
+                provider="sellersprite",
+                tool="asin_detail",
+            ),
+            ResearchItem(
+                kind="product_attribute",
+                key="brand",
+                value="Apple",
+                provider="sellersprite",
+                tool="asin_detail",
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        "amazon_create.mcp.live_research.fetch_live_mcp_research_sync",
+        lambda *_args, **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        "amazon_create.mcp.live_research.research_bundle_from_snapshots",
+        lambda *_args, **_kwargs: bundle,
+    )
+    settings = Settings(MOCK=False, SELLERSPRITE_MCP_KEY="configured")
+
+    result = load_asin_research_context(
+        settings,
+        asin="B08N5WRWNW",
+        marketplace="US",
+    )
+
+    assert result["mode"] == "live"
+    assert "asin_no_effective_product_data" not in result["gaps"]
+
+
 def test_media_title_is_not_clamped_to_non_media_limit() -> None:
     title = "A" * 90
     deliverable, _ = finalize_deliverable(

@@ -23,10 +23,6 @@ class RenameRequest(BaseModel):
     title: str = Field(min_length=1, max_length=120)
 
 
-class FactRequest(BaseModel):
-    value: str = Field(max_length=8000)
-
-
 def _payload(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
@@ -99,7 +95,7 @@ def send_message(thread_id: str, request: MessageRequest) -> StreamingResponse:
     def events() -> Iterator[str]:
         yield _sse("snapshot", _service().snapshot(thread_id))
         try:
-            for event in _service().stream_pending_turn(thread_id, chunk_chars=32):
+            for event in _service().stream_pending_turn(thread_id):
                 yield _sse(event.kind, {"content": event.content})
         except Exception as exc:  # noqa: BLE001
             yield _sse("error", {"message": str(exc)})
@@ -107,43 +103,3 @@ def send_message(thread_id: str, request: MessageRequest) -> StreamingResponse:
             yield _sse("snapshot", _service().snapshot(thread_id))
 
     return StreamingResponse(events(), media_type="text/event-stream")
-
-
-@app.post("/sessions/{thread_id}/confirm")
-def confirm_current(thread_id: str) -> Any:
-    _snapshot(thread_id)
-    return _payload(_service().confirm_current(thread_id))
-
-
-@app.post("/sessions/{thread_id}/unavailable")
-def confirm_unavailable(thread_id: str) -> Any:
-    _snapshot(thread_id)
-    return _payload(_service().confirm_unavailable(thread_id))
-
-
-@app.put("/sessions/{thread_id}/facts/{fact_id}")
-def revise_fact(thread_id: str, fact_id: str, request: FactRequest) -> Any:
-    _snapshot(thread_id)
-    return _payload(_service().revise_fact(thread_id, fact_id, request.value))
-
-
-@app.post("/sessions/{thread_id}/facts/{fact_id}/confirm")
-def confirm_fact(thread_id: str, fact_id: str) -> Any:
-    snapshot = _snapshot(thread_id)
-    fact = snapshot.state.candidate(fact_id)
-    if fact is None:
-        raise HTTPException(status_code=404, detail="Fact not found")
-    return _payload(
-        _service().confirm_fact(
-            thread_id,
-            fact_id=fact_id,
-            revision=fact.revision,
-            value_digest=fact.value_digest,
-        )
-    )
-
-
-@app.post("/sessions/{thread_id}/regenerate")
-def regenerate(thread_id: str) -> Any:
-    _snapshot(thread_id)
-    return _payload(_service().regenerate(thread_id))

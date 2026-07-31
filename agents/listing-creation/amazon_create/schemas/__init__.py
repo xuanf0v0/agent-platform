@@ -1,15 +1,10 @@
 """Public schema exports for creation + MCP stubs."""
 
 from amazon_create.schemas.conversation import (
-    CandidateStatus,
+    ConfirmedFact,
     ConversationGraphState,
     ConversationMessage,
     ConversationSnapshot,
-    FactCandidate,
-    ReActAction,
-    ReActObservation,
-    ReActTool,
-    ReActTurn,
 )
 from amazon_create.schemas.deliverable import (
     CreationDeliverable,
@@ -30,7 +25,7 @@ from amazon_create.schemas.workflow import CreationSession, CreationStage
 
 __all__ = [
     "EVIDENCE_POLICY",
-    "CandidateStatus",
+    "ConfirmedFact",
     "ConversationGraphState",
     "ConversationMessage",
     "ConversationSnapshot",
@@ -39,15 +34,10 @@ __all__ = [
     "CreationStage",
     "EvidenceSourceKind",
     "EvidenceTier",
-    "FactCandidate",
     "FactRow",
     "FactStatus",
     "ImageDesignPlan",
     "OptimizedListingCopy",
-    "ReActAction",
-    "ReActObservation",
-    "ReActTool",
-    "ReActTurn",
     "RiskItem",
     "SourceListingCopy",
     "TitleVariant",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 class ConfigError(Exception):
@@ -25,4 +25,13 @@ class LLMClient(Protocol):
 
     def stream(self, system: str, user: str, **kwargs: object) -> Iterator[str]:
         """Yield one model completion without persisting partial output."""
+        ...
+
+    def select_tool(
+        self,
+        system: str,
+        user: str,
+        tools: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Let the model choose one optional tool call."""
         ...

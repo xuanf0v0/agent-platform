@@ -10,6 +10,9 @@ from amazon_create.mcp.live_research_types import ResearchBundle
 from amazon_create.mcp.research_context import build_research_context
 
 
+_ASIN_IDENTITY_ONLY_KEYS = frozenset({"asin", "marketplace", "parent"})
+
+
 def build_query(*, product_name: str, marketplace: str, specs: str = "") -> str:
     """Build a marketplace research query string."""
     parts = [product_name.strip(), marketplace.strip()]
@@ -153,12 +156,29 @@ def load_asin_research_context(
             research_bundle_from_snapshots(snapshots),
             snapshots=snapshots,
         )
+        attributes = context.get("product_attributes") or []
+        effective_attributes = [
+            item
+            for item in attributes
+            if isinstance(item, dict)
+            and str(item.get("key") or "") not in _ASIN_IDENTITY_ONLY_KEYS
+            and str(item.get("value") or "").strip()
+        ]
+        gaps = list(context.get("gaps") or [])
+        if not effective_attributes and "asin_no_effective_product_data" not in gaps:
+            gaps.append("asin_no_effective_product_data")
         context.update(
             {
-                "mode": "live" if context.get("product_attributes") else "degraded",
+                "mode": "live" if effective_attributes else "degraded",
                 "asin": asin,
                 "marketplace": marketplace,
                 "allowed_keywords": list(context.get("keywords") or []),
+                "gaps": gaps,
+                "guidance": (
+                    context.get("guidance")
+                    if effective_attributes
+                    else "无有效商品数据：SellerSprite 未返回标题、品牌、价格或其他实质字段。"
+                ),
             }
         )
         return context
