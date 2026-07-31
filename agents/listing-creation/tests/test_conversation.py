@@ -97,6 +97,32 @@ def test_conversation_history_is_persisted(tmp_path: Path) -> None:
     assert restored.state.messages[-1].content == "我理解你的意思：第二轮"
 
 
+def test_session_history_is_renamed_and_retained_until_deleted(tmp_path: Path) -> None:
+    database = tmp_path / "retained-history.sqlite3"
+    service = _service(database)
+    first = service.create_session()
+    second = service.create_session()
+    service.rename_session(first.state.thread_id, "手动标题")
+    service.close()
+
+    reopened = _service(database)
+    try:
+        rows = reopened.list_sessions()
+        assert {row["thread_id"] for row in rows} == {
+            first.state.thread_id,
+            second.state.thread_id,
+        }
+        assert next(row for row in rows if row["thread_id"] == first.state.thread_id)[
+            "title"
+        ] == "手动标题"
+        reopened.delete_session(first.state.thread_id)
+        assert [row["thread_id"] for row in reopened.list_sessions()] == [
+            second.state.thread_id
+        ]
+    finally:
+        reopened.close()
+
+
 def test_v2_session_payload_continues_as_freeform_chat(tmp_path: Path) -> None:
     service = _service(tmp_path / "legacy.sqlite3")
     snapshot = service.create_session()

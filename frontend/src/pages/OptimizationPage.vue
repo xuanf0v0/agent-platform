@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api, readSse } from '../api/client'
+import ConversationHistoryDrawer, { type HistoryItem } from '../components/ConversationHistoryDrawer.vue'
 import DiagnosisReport from '../components/DiagnosisReport.vue'
+import OptimizationWorkflowMessage from '../components/OptimizationWorkflowMessage.vue'
 
-const source = ref(''); const run = ref<any>(); const input = ref(''); const processing = ref(false); const progress = ref(''); const progressStep = ref(0); const progressTotal = ref(8); const rounds = ref<any[]>([]); const error = ref('')
+const source = ref(''); const run = ref<any>(); const runs = ref<any[]>([]); const input = ref(''); const processing = ref(false); const progress = ref(''); const progressStep = ref(0); const progressTotal = ref(8); const rounds = ref<any[]>([]); const error = ref(''); const historyOpen = ref(true)
 const result = computed(() => run.value?.result); const status = computed(() => run.value?.status || 'idle')
 const chatEnabled = computed(() => Boolean(run.value?.chat_enabled && status.value === 'completed'))
+const historyItems = computed<HistoryItem[]>(() => runs.value.map(item => ({ id: item.run_id, title: item.title, status: item.status, updatedAt: item.updated_at, deletable: item.status !== 'running' && item.status !== 'queued' })))
+async function loadRuns() { runs.value = await api.service('listing-optimization', 'runs') }
+async function loadRun(id: string) { run.value = await api.service('listing-optimization', `runs/${id}`); source.value = run.value.source_text; input.value = ''; rounds.value = []; progress.value = ''; error.value = ''; localStorage.setItem('optimization-run', id); if (run.value.status === 'running' || run.value.status === 'queued') await watch(id) }
 async function watch(runId: string, after = -1) {
   processing.value = true; error.value = ''
   try {
@@ -18,28 +23,30 @@ async function watch(runId: string, after = -1) {
       if (event === 'chat_result') run.value = { ...run.value, status: 'completed', result: data.result, turn_status: 'idle' }
       if (event === 'chat_error') error.value = data.message
     })
-    run.value = await api.service('listing-optimization', `runs/${runId}`); localStorage.setItem('optimization-run', runId)
+    run.value = await api.service('listing-optimization', `runs/${runId}`); localStorage.setItem('optimization-run', runId); await loadRuns()
   } catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
   finally { processing.value = false }
 }
 async function submit() {
   const text = input.value.trim(); if (!text || processing.value) return
   source.value = text; input.value = ''; rounds.value = []; progress.value = '已接收 Listing，开始处理…'
-  run.value = await api.service('listing-optimization', 'runs', { method: 'POST', body: JSON.stringify({ source_text: text }) }); await watch(run.value.run_id)
+  run.value = await api.service('listing-optimization', 'runs', { method: 'POST', body: JSON.stringify({ source_text: text }) }); localStorage.setItem('optimization-run', run.value.run_id); await loadRuns(); await watch(run.value.run_id)
 }
 async function reply() { const text = input.value.trim(); if (!text) return; input.value = ''; run.value = await api.service('listing-optimization', `runs/${run.value.run_id}/reply`, { method: 'POST', body: JSON.stringify({ text }) }); await watch(run.value.run_id, -1) }
 async function chatReply() { const text = input.value.trim(); if (!text || processing.value) return; input.value = ''; run.value = await api.service('listing-optimization', `runs/${run.value.run_id}/messages`, { method: 'POST', body: JSON.stringify({ text }) }); await watch(run.value.run_id, -1) }
 async function action(type: 'approve' | 'retry') { run.value = await api.service('listing-optimization', `runs/${run.value.run_id}/actions`, { method: 'POST', body: JSON.stringify({ action: type }) }); await watch(run.value.run_id, -1) }
 function reset() { localStorage.removeItem('optimization-run'); run.value = undefined; source.value = ''; input.value = ''; rounds.value = []; progress.value = '' }
-async function deleteRun() { if (!run.value || processing.value || !window.confirm('确定删除当前优化会话及终稿历史吗？')) return; await api.service('listing-optimization', `runs/${run.value.run_id}`, { method: 'DELETE' }); reset() }
+async function renameRun(id: string, title: string) { const renamed = await api.service<any>('listing-optimization', `runs/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }); if (run.value?.run_id === id) run.value = renamed; await loadRuns() }
+async function deleteRun(id: string) { await api.service('listing-optimization', `runs/${id}`, { method: 'DELETE' }); if (run.value?.run_id === id) reset(); await loadRuns() }
 async function copyResult() { if (result.value?.rendered_text) await window.navigator.clipboard.writeText(result.value.rendered_text) }
-onMounted(async () => { const id = localStorage.getItem('optimization-run'); if (!id) return; try { run.value = await api.service('listing-optimization', `runs/${id}`); source.value = run.value.source_text; if (run.value.status === 'running' || run.value.status === 'queued') await watch(id) } catch { localStorage.removeItem('optimization-run') } })
+onMounted(async () => { await loadRuns(); const remembered = localStorage.getItem('optimization-run'); const target = runs.value.find(item => item.run_id === remembered)?.run_id || runs.value[0]?.run_id; if (target) { try { await loadRun(target) } catch { localStorage.removeItem('optimization-run') } } })
 </script>
 
 <template>
-  <section class="page workspace optimization-layout">
-    <main class="chat-shell glass-panel"><header class="workspace-head"><div><p class="eyebrow">DIAGNOSE FIRST, THEN OPTIMIZE</p><h1>文案诊断与安全改写</h1><p>粘贴完整 Listing，先诊断、确认，再生成可复制上传稿</p></div><div v-if="run" class="agent-actions"><button class="btn ghost" @click="reset">新建对话</button><button class="btn danger" :disabled="processing" @click="deleteRun">删除</button></div></header>
-      <div class="chat optimizer-chat"><div v-if="!source" class="message assistant"><span class="avatar">AI</span><div class="bubble">发送完整 Listing，我会先进行市场研究与规则诊断</div></div><div v-if="source" class="message user"><span class="avatar">你</span><pre class="bubble">{{ source }}</pre></div><div v-for="(replyText, index) in run?.replies || []" :key="index" class="message user"><span class="avatar">你</span><div class="bubble">{{ replyText }}</div></div>
+  <section class="page workspace optimization-layout" :class="{ 'history-open': historyOpen }">
+    <ConversationHistoryDrawer v-model:open="historyOpen" title="Listing 优化" :items="historyItems" :selected-id="run?.run_id" :busy="processing" @create="reset" @select="loadRun" @rename="renameRun" @delete="deleteRun"/>
+    <main class="chat-shell glass-panel"><header class="workspace-head"><div><p class="eyebrow">DIAGNOSE FIRST, THEN OPTIMIZE</p><h1>文案诊断与安全改写</h1><p>粘贴完整 Listing，先诊断、确认，再生成可复制上传稿</p></div></header>
+      <div class="chat optimizer-chat"><div v-if="!source" class="message assistant"><span class="avatar">AI</span><div class="bubble">发送完整 Listing，我会先进行市场研究与规则诊断</div></div><div v-if="source" class="message user"><span class="avatar">你</span><pre class="bubble">{{ source }}</pre></div><OptimizationWorkflowMessage v-for="(message, index) in run?.workflow_messages || []" :key="`workflow-${index}`" :message="message"/><template v-if="!run?.workflow_messages?.length"><OptimizationWorkflowMessage v-if="status === 'completed' && result?.diagnosis_report" :message="{ role: 'assistant', status: 'awaiting_approval', result }"/><div v-for="(replyText, index) in run?.replies || []" :key="`legacy-reply-${index}`" class="message user"><span class="avatar">你</span><div class="bubble">{{ replyText }}</div></div></template>
         <template v-if="status === 'completed'"><div v-for="(message, index) in run?.chat_messages || []" :key="`chat-${index}`" class="message" :class="message.role"><span class="avatar">{{ message.role === 'user' ? '你' : 'AI' }}</span><div class="bubble">{{ message.content }}</div></div></template>
         <div v-if="processing" class="message assistant"><span class="avatar">AI</span><div class="bubble"><div class="typing"><i/><i/><i/> {{ progress || 'Agent 正在处理' }}</div></div></div>
         <div v-if="result" class="message assistant"><span class="avatar">AI</span><div class="bubble result-card">

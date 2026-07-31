@@ -26,7 +26,7 @@ from amazon_copy.automatic_models import (
 from amazon_copy.config import Settings
 from amazon_copy.final_conversation import process_final_turn
 from amazon_copy.input_security import require_clarification_input, require_listing_input
-from amazon_copy.run_store import OptimizationRunStore
+from amazon_copy.run_store import OptimizationRunStore, default_run_title
 from amazon_copy.simple_optimizer import run_automatic_optimization
 
 if TYPE_CHECKING:
@@ -54,6 +54,12 @@ class RunActionRequest(BaseModel):
     action: Literal["approve", "retry"]
 
 
+class RenameRequest(BaseModel):
+    """User-supplied history title."""
+
+    title: str = Field(min_length=1, max_length=120)
+
+
 @dataclass
 class RunState:
     """In-memory state and event ledger for one optimization run."""
@@ -61,10 +67,12 @@ class RunState:
     run_id: str
     source_text: str
     identity: ProductIdentity | None
+    title: str = "新建优化"
     status: str = "queued"
     result: AutomaticOptimizationResult | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
     replies: list[str] = field(default_factory=list)
+    workflow_messages: list[dict[str, Any]] = field(default_factory=list)
     chat_messages: list[dict[str, str]] = field(default_factory=list)
     turn_status: str = "idle"
     approval_token: str | None = None
@@ -81,10 +89,12 @@ class RunState:
             return {
                 "run_id": self.run_id,
                 "source_text": self.source_text,
+                "title": self.title,
                 "status": self.status,
                 "identity": self.identity.model_dump(mode="json") if self.identity else None,
                 "result": self.result.model_dump(mode="json") if self.result else None,
                 "replies": list(self.replies),
+                "workflow_messages": list(self.workflow_messages),
                 "chat_messages": list(self.chat_messages),
                 "chat_enabled": isinstance(self.result, CompletedOptimization),
                 "turn_status": self.turn_status,
@@ -118,6 +128,11 @@ class RunState:
             for item in payload.get("chat_messages", [])
             if isinstance(item, dict) and str(item.get("content") or "").strip()
         ]
+        workflow_messages = [
+            dict(item)
+            for item in payload.get("workflow_messages", [])
+            if isinstance(item, dict) and item.get("role") in {"user", "assistant"}
+        ]
         if status in {"queued", "running"} or turn_status == "running":
             status = result.status if result is not None else "failed"
             turn_status = "interrupted"
@@ -135,9 +150,14 @@ class RunState:
                 if identity_payload
                 else None
             ),
+            title=(
+                str(payload.get("title") or "").strip()
+                or default_run_title(str(payload.get("source_text") or ""))
+            ),
             status=status,
             result=result,
             replies=[str(item) for item in payload.get("replies", [])],
+            workflow_messages=workflow_messages,
             chat_messages=chat_messages,
             turn_status=turn_status,
             approval_token=(
@@ -161,6 +181,8 @@ def _persist(run: RunState) -> None:
         run.run_id,
         json.dumps(run.durable_payload(), ensure_ascii=False, separators=(",", ":")),
         now,
+        title=run.title,
+        status=run.status,
     )
 
 
@@ -172,6 +194,7 @@ def _get_run(run_id: str) -> RunState:
             if payload is not None:
                 run = RunState.restore(payload)
                 _runs[run_id] = run
+                _persist(run)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
@@ -202,6 +225,23 @@ def _resume_context(
         approval_token=token,
         identity=run.identity,
     )
+
+
+def _archive_stage(run: RunState, user_text: str) -> None:
+    """Preserve the visible workflow turn before replacing the current result."""
+    if run.result is None:
+        return
+    with run.lock:
+        run.workflow_messages.extend(
+            (
+                {
+                    "role": "assistant",
+                    "status": run.result.status,
+                    "result": run.result.model_dump(mode="json"),
+                },
+                {"role": "user", "content": user_text},
+            )
+        )
 
 
 def _execute(run: RunState, context: AutomaticOptimizationContext) -> None:
@@ -271,7 +311,12 @@ def create_run(request: StartRequest) -> dict[str, Any]:
     )
     if not any((identity.asin, identity.marketplace, identity.product_type)):
         identity = None
-    run = RunState(uuid4().hex, request.source_text, identity)
+    run = RunState(
+        uuid4().hex,
+        request.source_text,
+        identity,
+        title=default_run_title(request.source_text),
+    )
     with _runs_lock:
         _runs[run.run_id] = run
     _persist(run)
@@ -291,6 +336,24 @@ def get_run(run_id: str) -> dict[str, Any]:
     return _get_run(run_id).payload()
 
 
+@app.get("/runs")
+def list_runs() -> list[dict[str, str]]:
+    """List every durable optimization conversation."""
+    return _store.list_summaries()
+
+
+@app.patch("/runs/{run_id}")
+def rename_run(run_id: str, request: RenameRequest) -> dict[str, Any]:
+    """Rename one optimization conversation and preserve its full state."""
+    run = _get_run(run_id)
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Title must not be blank")
+    run.title = title[:120]
+    _persist(run)
+    return run.payload()
+
+
 @app.post("/runs/{run_id}/reply", status_code=202)
 def reply(run_id: str, request: ReplyRequest) -> dict[str, Any]:
     """Resume a run with user clarification."""
@@ -298,7 +361,9 @@ def reply(run_id: str, request: ReplyRequest) -> dict[str, Any]:
     if not isinstance(run.result, NeedsClarification):
         raise HTTPException(status_code=409, detail="Run is not awaiting clarification")
     require_clarification_input(request.text)
-    run.replies.append(request.text)
+    _archive_stage(run, request.text)
+    with run.lock:
+        run.replies.append(request.text)
     _persist(run)
     postflight = run.result.postflight_review
     token = getattr(run.result, "approval_token", None)
@@ -313,6 +378,8 @@ def run_action(run_id: str, request: RunActionRequest) -> dict[str, Any]:
     run = _get_run(run_id)
     if run.status == "running":
         raise HTTPException(status_code=409, detail="Run is already active")
+    action_text = "确认并生成上传稿" if request.action == "approve" else "重试"
+    _archive_stage(run, action_text)
     mode = "optimize" if request.action == "approve" else "diagnose"
     _start_worker(run, _resume_context(run, mode=mode))
     return run.payload()

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from contextlib import closing
 from typing import TYPE_CHECKING, final
 
+import amazon_copy.api as api_module
 from amazon_copy.config import Settings
 from amazon_copy.final_conversation import process_final_turn
-from amazon_copy.run_store import OptimizationRunStore
+from amazon_copy.run_store import OptimizationRunStore, default_run_title
 
-from tests.specialized_ui_support import SOURCE, completed
+from tests.specialized_ui_support import SOURCE, awaiting_approval, completed
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -152,7 +155,13 @@ def test_modify_turn_replaces_draft_only_after_release_checks() -> None:
 def test_optimization_run_store_survives_reopen(tmp_path: Path) -> None:
     database = tmp_path / "runs.sqlite3"
     first = OptimizationRunStore(database)
-    first.save("run-1", '{"run_id":"run-1","status":"completed"}', "2026-07-31")
+    first.save(
+        "run-1",
+        '{"run_id":"run-1","status":"completed"}',
+        "2026-07-31",
+        title="Rock Listing",
+        status="completed",
+    )
     first.close()
 
     reopened = OptimizationRunStore(database)
@@ -162,3 +171,129 @@ def test_optimization_run_store_survives_reopen(tmp_path: Path) -> None:
         assert reopened.load("run-1") is None
     finally:
         reopened.close()
+
+
+def test_run_history_is_sorted_renamed_and_permanently_deleted(tmp_path: Path) -> None:
+    store = OptimizationRunStore(tmp_path / "history.sqlite3")
+    try:
+        store.save(
+            "older",
+            '{"run_id":"older","status":"failed"}',
+            "2026-07-30T09:00:00Z",
+            title="Older Listing",
+            status="failed",
+        )
+        store.save(
+            "newer",
+            '{"run_id":"newer","status":"completed"}',
+            "2026-07-31T09:00:00Z",
+            title="Newer Listing",
+            status="completed",
+        )
+
+        assert [item["run_id"] for item in store.list_summaries()] == ["newer", "older"]
+        assert store.rename("older", "Renamed Listing", "2026-08-01T09:00:00Z") is True
+        assert store.list_summaries()[0]["title"] == "Renamed Listing"
+        assert store.delete("older") is True
+        assert [item["run_id"] for item in store.list_summaries()] == ["newer"]
+    finally:
+        store.close()
+
+
+def test_legacy_run_table_is_migrated_and_backfilled(tmp_path: Path) -> None:
+    database = tmp_path / "legacy.sqlite3"
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "CREATE TABLE optimization_api_runs ("
+            "run_id TEXT PRIMARY KEY, payload_json TEXT NOT NULL, "
+            "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO optimization_api_runs VALUES (?, ?, ?, ?)",
+            (
+                "legacy",
+                json.dumps(
+                    {
+                        "run_id": "legacy",
+                        "source_text": "Title: Ceramic Vase\nBullet one",
+                        "status": "needs_clarification",
+                    }
+                ),
+                "2026-07-30",
+                "2026-07-31",
+            ),
+        )
+
+    store = OptimizationRunStore(database)
+    try:
+        assert store.list_summaries() == [
+            {
+                "run_id": "legacy",
+                "title": "Ceramic Vase",
+                "status": "needs_clarification",
+                "created_at": "2026-07-30",
+                "updated_at": "2026-07-31",
+            }
+        ]
+    finally:
+        store.close()
+
+
+def test_default_run_title_uses_first_nonblank_listing_line() -> None:
+    assert default_run_title("\n标题：Wooden Desk Organizer\nBullet") == "Wooden Desk Organizer"
+
+
+def test_workflow_messages_survive_result_replacement_and_restore() -> None:
+    run = api_module.RunState(
+        "workflow-history",
+        SOURCE,
+        None,
+        status="awaiting_approval",
+        result=awaiting_approval(token="a" * 64),
+    )
+
+    api_module._archive_stage(run, "确认并生成上传稿")
+    run.result = completed()
+    run.status = "completed"
+    restored = api_module.RunState.restore(run.durable_payload())
+
+    assert restored.workflow_messages[0]["role"] == "assistant"
+    assert restored.workflow_messages[0]["status"] == "awaiting_approval"
+    assert restored.workflow_messages[0]["result"]["diagnosis_report"]
+    assert restored.workflow_messages[1] == {
+        "role": "user",
+        "content": "确认并生成上传稿",
+    }
+
+
+def test_optimization_history_api_lists_renames_and_deletes(tmp_path: Path) -> None:
+    store = OptimizationRunStore(tmp_path / "api-history.sqlite3")
+    previous_store = api_module._store
+    previous_runs = api_module._runs
+    try:
+        api_module._store = store
+        api_module._runs = {}
+        run = api_module.RunState(
+            "history-run",
+            SOURCE,
+            None,
+            title="Original title",
+            status="completed",
+            result=completed(),
+        )
+        api_module._runs[run.run_id] = run
+        api_module._persist(run)
+
+        assert api_module.list_runs()[0]["title"] == "Original title"
+        renamed = api_module.rename_run(
+            run.run_id,
+            api_module.RenameRequest(title="Renamed title"),
+        )
+        assert renamed["title"] == "Renamed title"
+        assert api_module.list_runs()[0]["title"] == "Renamed title"
+        api_module.delete_run(run.run_id)
+        assert api_module.list_runs() == []
+    finally:
+        api_module._store = previous_store
+        api_module._runs = previous_runs
+        store.close()
