@@ -1,5 +1,6 @@
 .DS_Store
 .cache/
+.vite/
 .tmp/
 __pycache__/
 *.py[cod]
@@ -18,3 +19,4 @@ agents/*/amazon_copy/web_dist/
 agents/*/amazon_create/web_dist/
 agents/*/.pytest_cache/
 agents/*/.ruff_cache/
+agents/*/.amazon_copy/

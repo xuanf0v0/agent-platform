@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CURRENT_PGID=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')
+CURRENT_PGID=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ' || true)
 WITH_TUNNEL=false
 BACKEND_PID=""
 FRONTEND_PID=""
@@ -24,9 +24,9 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # ── Kill old processes on both ports ──────────────────────
 for PORT in 8000 5173 8501 8502; do
-    OLD_PIDS=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null)
+    OLD_PIDS=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null || true)
     for OLD_PID in $OLD_PIDS; do
-        OLD_PGID=$(ps -o pgid= -p "$OLD_PID" 2>/dev/null | tr -d ' ')
+        OLD_PGID=$(ps -o pgid= -p "$OLD_PID" 2>/dev/null | tr -d ' ' || true)
         if [ -n "$OLD_PGID" ] && [ "$OLD_PGID" != "$CURRENT_PGID" ]; then
             echo "🔪 端口 $PORT 被占用 (PID: $OLD_PID, PGID: $OLD_PGID)，自动释放..."
             kill -TERM -- "-$OLD_PGID" 2>/dev/null || true
