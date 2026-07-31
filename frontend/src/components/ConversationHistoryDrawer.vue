@@ -10,20 +10,19 @@ export interface HistoryItem {
 }
 
 const props = defineProps<{ title: string; items: HistoryItem[]; selectedId?: string; busy?: boolean }>()
+const open = defineModel<boolean>('open', { default: true })
 const emit = defineEmits<{
   create: []
   select: [id: string]
   rename: [id: string, title: string]
   delete: [id: string]
-  'update:open': [value: boolean]
 }>()
 
-const open = ref(true)
 const editingId = ref('')
 const editingTitle = ref('')
 let media: MediaQueryList | undefined
 
-function setOpen(value: boolean) { open.value = value; emit('update:open', value) }
+function setOpen(value: boolean) { open.value = value }
 function beginRename(item: HistoryItem) { editingId.value = item.id; editingTitle.value = item.title }
 function cancelRename() { editingId.value = ''; editingTitle.value = '' }
 function commitRename(item: HistoryItem) {
