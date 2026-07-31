@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
+import amazon_create.pipeline.creation_pipeline as pipeline_module
 from amazon_create.config import Settings
+from amazon_create.llm.mock import MockLLM
 from amazon_create.mcp.live_research_call import _tool_arguments
 from amazon_create.mcp.live_research_data import normalize_tool_payload
 from amazon_create.pipeline.creation_pipeline import (
@@ -24,6 +27,9 @@ from amazon_create.schemas.evidence import (
 )
 from amazon_create.schemas.workflow import CreationStage
 from pydantic import SecretStr
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def test_parse_brief_ready() -> None:
@@ -52,6 +58,37 @@ def test_fast_path_mock() -> None:
         CreationStage.FINAL_COPY,
         CreationStage.COMPLETED,
     }
+
+
+def test_stage_repairs_one_invalid_json_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class RepairingLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+            self.delegate = MockLLM("writer")
+
+        def complete(self, system: str, user: str, **kwargs: object) -> str:
+            self.call_count += 1
+            if self.call_count == 1:
+                return "not json"
+            return self.delegate.complete(system, user, **kwargs)
+
+    llm = RepairingLLM()
+    monkeypatch.setattr(pipeline_module, "get_llm", lambda *_args, **_kwargs: llm)
+    session = new_session()
+    session.brief = parse_brief_message("产品: Hardware Cloth\n站点: US")
+    session.stage = CreationStage.AUDIENCE
+
+    session = pipeline_module.run_stage(
+        session,
+        settings=Settings(mock=True),
+        research_context={},
+    )
+
+    assert llm.call_count == 2
+    assert session.error == ""
+    assert session.artifact(CreationStage.AUDIENCE) is not None
 
 
 def test_staged_approve_flow() -> None:

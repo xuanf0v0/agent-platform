@@ -7,13 +7,15 @@ from typing import TYPE_CHECKING, final
 
 import amazon_copy.api as api_module
 from amazon_copy.config import Settings
-from amazon_copy.final_conversation import process_final_turn
+from amazon_copy.final_conversation import _system_prompt, process_final_turn
 from amazon_copy.run_store import OptimizationRunStore, default_run_title
 
 from tests.specialized_ui_support import SOURCE, awaiting_approval, completed
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 
 @final
@@ -26,6 +28,97 @@ class DecisionLLM:
         del system, user, kwargs
         self.call_count += 1
         return json.dumps(self.responses.pop(0), ensure_ascii=False)
+
+
+@final
+class RepairingDecisionLLM:
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.users: list[str] = []
+
+    def complete(self, system: str, user: str, **kwargs: object) -> str:
+        del system, kwargs
+        self.call_count += 1
+        self.users.append(user)
+        if self.call_count == 1:
+            return '{"title":"wrong contract"}'
+        return json.dumps(
+            {
+                "action": "answer",
+                "assistant_reply": "是的，当前终稿包含 5 条 Bullet Point。",
+                "research_query": "",
+                "facts": [],
+                "listing": None,
+            },
+            ensure_ascii=False,
+        )
+
+
+@final
+class MissingListingDecisionLLM:
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def complete(self, system: str, user: str, **kwargs: object) -> str:
+        del system, user, kwargs
+        self.call_count += 1
+        if self.call_count == 1:
+            return json.dumps(
+                {
+                    "action": "modify",
+                    "assistant_reply": "已修改。",
+                    "listing": None,
+                },
+                ensure_ascii=False,
+            )
+        return json.dumps(
+            {
+                "action": "answer",
+                "assistant_reply": "请说明需要修改的具体字段。",
+                "listing": None,
+            },
+            ensure_ascii=False,
+        )
+
+
+def test_final_conversation_prompt_has_only_its_own_output_contract() -> None:
+    prompt = _system_prompt()
+
+    assert '"action": "answer | modify | research | new_identity"' in prompt
+    assert '"title": "..."' not in prompt
+
+
+def test_invalid_decision_contract_is_repaired_once() -> None:
+    llm = RepairingDecisionLLM()
+
+    turn = process_final_turn(
+        SOURCE,
+        completed(),
+        [],
+        "这不是有五条吗？",
+        settings=Settings(MOCK=True),
+        llm=llm,
+    )
+
+    assert turn.reply == "是的，当前终稿包含 5 条 Bullet Point。"
+    assert llm.call_count == 2
+    assert "OUTPUT_REPAIR_REQUIRED" in llm.users[1]
+
+
+def test_incomplete_modify_action_is_repaired_once() -> None:
+    llm = MissingListingDecisionLLM()
+
+    turn = process_final_turn(
+        SOURCE,
+        completed(),
+        [],
+        "帮我改一下",
+        settings=Settings(MOCK=True),
+        llm=llm,
+    )
+
+    assert turn.reply == "请说明需要修改的具体字段。"
+    assert llm.call_count == 2
 
 
 def test_answer_turn_does_not_replace_release_ready_listing() -> None:
@@ -264,6 +357,37 @@ def test_workflow_messages_survive_result_replacement_and_restore() -> None:
         "role": "user",
         "content": "确认并生成上传稿",
     }
+
+
+def test_failed_final_turn_is_not_saved_as_assistant_conversation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run = api_module.RunState(
+        "failed-chat",
+        SOURCE,
+        None,
+        status="completed",
+        result=completed(),
+        chat_messages=[{"role": "user", "content": "这不是有五条吗？"}],
+    )
+
+    failure_message = "invalid decision"
+
+    def fail_turn(*_args: object, **_kwargs: object) -> None:
+        raise ValueError(failure_message)
+
+    monkeypatch.setattr(api_module, "process_final_turn", fail_turn)
+    monkeypatch.setattr(api_module, "_persist", lambda _run: None)
+
+    api_module._execute_chat(run, "这不是有五条吗？")
+
+    assert run.chat_messages == [{"role": "user", "content": "这不是有五条吗？"}]
+    assert run.turn_status == "failed"
+    assert [event["event"] for event in run.events] == [
+        "chat_status",
+        "chat_error",
+        "done",
+    ]
 
 
 def test_optimization_history_api_lists_renames_and_deletes(tmp_path: Path) -> None:

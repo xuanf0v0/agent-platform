@@ -163,22 +163,52 @@ async def api_agent_service(agent_id: str, path: str, request: Request):
         if key.lower() not in {"host", "content-length", "connection"}
     }
 
-    is_stream = path.endswith("events") or path.endswith("messages")
-
-    async def stream():
-        async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream(
-                request.method,
-                target,
-                params=request.query_params,
-                content=body,
-                headers=headers,
-            ) as response:
-                async for chunk in response.aiter_raw():
-                    yield chunk
+    is_stream = (
+        request.method == "GET" and path.endswith("/events")
+    ) or (
+        agent_id == "listing-creation"
+        and request.method == "POST"
+        and path.startswith("sessions/")
+        and path.endswith("/messages")
+    )
 
     if is_stream:
-        return StreamingResponse(stream(), media_type="text/event-stream")
+        client = httpx.AsyncClient(timeout=None)
+        upstream_request = client.build_request(
+            request.method,
+            target,
+            params=request.query_params,
+            content=body,
+            headers=headers,
+        )
+        try:
+            response = await client.send(upstream_request, stream=True)
+        except Exception:
+            await client.aclose()
+            raise
+        if response.is_error:
+            content = await response.aread()
+            await response.aclose()
+            await client.aclose()
+            return Response(
+                content=content,
+                status_code=response.status_code,
+                media_type=response.headers.get("content-type", "application/json"),
+            )
+
+        async def stream():
+            try:
+                async for chunk in response.aiter_raw():
+                    yield chunk
+            finally:
+                await response.aclose()
+                await client.aclose()
+
+        return StreamingResponse(
+            stream(),
+            status_code=response.status_code,
+            media_type=response.headers.get("content-type", "text/event-stream"),
+        )
 
     async with httpx.AsyncClient(timeout=None) as client:
         response = await client.request(

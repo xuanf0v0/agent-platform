@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from amazon_copy.llm import LLMClient
 
 _MAX_REPAIR_ATTEMPTS = 5
+_MAX_DECISION_ATTEMPTS = 2
 
 
 class ConversationFact(BaseModel):
@@ -87,11 +88,20 @@ class FinalConversationError(RuntimeError):
     """Safe failure at the completed-listing conversation boundary."""
 
 
+def _validate_decision_contract(decision: ConversationDecision) -> ConversationDecision:
+    if decision.action == "modify" and decision.listing is None:
+        message = "模型选择修改终稿, 但未返回完整稿件"
+        raise ValueError(message)
+    if decision.action == "research" and not decision.research_query.strip():
+        message = "模型选择重新研究, 但未返回研究查询"
+        raise ValueError(message)
+    return decision
+
+
 def _system_prompt() -> str:
     return "\n\n---\n".join(
         (
             load_prompt("constitution"),
-            load_prompt("listing_optimizer"),
             load_prompt("final_listing_conversation"),
         )
     )
@@ -162,7 +172,18 @@ def _context_payload(  # noqa: PLR0913 - explicit prompt boundary inputs
             if result.diagnosis_report is not None
             else None
         ),
-        "conversation": messages[-40:],
+        "conversation": [
+            message
+            for message in messages[-40:]
+            if not (
+                message.get("role") == "assistant"
+                and message.get("content")
+                in {
+                    "模型未返回有效的终稿对话动作, 请重试",
+                    "终稿对话处理失败, 请重试",
+                }
+            )
+        ],
         "current_user_message": user_text,
     }
     if feedback:
@@ -182,31 +203,41 @@ def _decide(  # noqa: PLR0913 - explicit model-decision boundary inputs
     feedback: tuple[str, ...] = (),
     fresh_research: dict[str, object] | None = None,
 ) -> ConversationDecision:
-    try:
+    context = _context_payload(
+        source_text,
+        result,
+        messages,
+        user_text,
+        feedback=feedback,
+        fresh_research=fresh_research,
+    )
+    validation_error: ValidationError | ValueError | TypeError | None = None
+    for attempt in range(_MAX_DECISION_ATTEMPTS):
+        user = context
+        if attempt:
+            user += (
+                "\n\nOUTPUT_REPAIR_REQUIRED: The previous response did not match the "
+                "Final Listing Conversation JSON contract. Return exactly one object with "
+                "action, assistant_reply, research_query, facts, and listing. For a question "
+                "that does not change the listing, use action=answer and listing=null."
+            )
         raw = llm.complete(
             _system_prompt(),
-            _context_payload(
-                source_text,
-                result,
-                messages,
-                user_text,
-                feedback=feedback,
-                fresh_research=fresh_research,
-            ),
+            user,
             json_mode=True,
-            temperature=0.35 if not feedback else 0.1,
+            temperature=0.35 if not feedback and not attempt else 0.1,
             max_tokens=4096,
         )
-        decision = ConversationDecision.model_validate(extract_json_object(raw))
-    except (ValidationError, ValueError, TypeError) as exc:
+        try:
+            decision = _validate_decision_contract(
+                ConversationDecision.model_validate(extract_json_object(raw))
+            )
+            break
+        except (ValidationError, ValueError, TypeError) as exc:
+            validation_error = exc
+    else:
         message = "模型未返回有效的终稿对话动作, 请重试"
-        raise FinalConversationError(message) from exc
-    if decision.action == "modify" and decision.listing is None:
-        message = "模型选择修改终稿, 但未返回完整稿件"
-        raise FinalConversationError(message)
-    if decision.action == "research" and not decision.research_query.strip():
-        message = "模型选择重新研究, 但未返回研究查询"
-        raise FinalConversationError(message)
+        raise FinalConversationError(message) from validation_error
     return decision
 
 

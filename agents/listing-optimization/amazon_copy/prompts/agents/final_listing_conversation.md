@@ -49,6 +49,11 @@ Return one JSON object only:
   facts.
 - For `modify`, apply the user's intent as closely as the constraints permit. If feedback reports a
   failed release check, safely rewrite the candidate and return another complete listing.
+- For `modify`, keep the paste-ready field contract: title 10–75 characters, nonblank
+  item_highlights no more than 125 characters, exactly `target_bullet_count` complete bullets,
+  and lowercase space-separated backend_search_terms no more than 250 UTF-8 bytes. Use the
+  limits in `rule_context` when they are stricter. Return these fields only inside `listing`; the
+  top-level response remains the Final Listing Conversation action object above.
 - `assistant_reply` should briefly describe the result or answer. Do not paste the complete listing
   into it because the UI has a dedicated current-draft field.
 

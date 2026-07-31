@@ -182,20 +182,34 @@ def generate_titles(
 ) -> TitleGeneration:
     """Generate exactly five bilingual title candidates and select one winner."""
     client = llm or get_llm("title")
-    raw = client.complete(
-        system=_system_prompt("title"),
-        user=_payload(product, selling_points, extra={"title_mode": str(mode)}),
-    )
-    try:
-        data = extract_json_object(raw)
-        rows = data.get("titles")
-        if not isinstance(rows, list):
-            message = "title JSON must contain a titles array"
-            raise WriterError(message)
-        candidates = [TitleCandidate.model_validate(row) for row in rows]
-    except (JsonExtractError, ValueError, TypeError) as exc:
-        message = f"invalid title JSON: {exc}"
-        raise WriterError(message) from exc
+    system = _system_prompt("title")
+    user = _payload(product, selling_points, extra={"title_mode": str(mode)})
+    candidates: list[TitleCandidate] | None = None
+    parse_error: JsonExtractError | ValueError | TypeError | None = None
+    for attempt in range(2):
+        raw = client.complete(
+            system=system,
+            user=user
+            + (
+                "\n\nThe previous response failed output validation. Return a fresh JSON "
+                "object containing exactly five valid bilingual title candidates."
+                if attempt
+                else ""
+            ),
+        )
+        try:
+            data = extract_json_object(raw)
+            rows = data.get("titles")
+            if not isinstance(rows, list):
+                message = "title JSON must contain a titles array"
+                raise WriterError(message)
+            candidates = [TitleCandidate.model_validate(row) for row in rows]
+            break
+        except (JsonExtractError, ValueError, TypeError) as exc:
+            parse_error = exc
+    if candidates is None:
+        message = f"invalid title JSON: {parse_error}"
+        raise WriterError(message) from parse_error
     if len(candidates) == _EXPECTED_COPY_COUNT and any(
         not candidate.text_zh.strip() for candidate in candidates
     ):
@@ -263,11 +277,24 @@ def generate_bullets(
 ) -> list[BulletPoint]:
     """Generate exactly five bilingual, 100-150-char Amazon bullet points."""
     client = llm or get_llm("bullets")
-    raw = client.complete(
-        system=_system_prompt("bullets"),
-        user=_payload(product, selling_points),
-    )
-    bullets = _parse_bullets(raw, mode="write")
+    system = _system_prompt("bullets")
+    user = _payload(product, selling_points)
+    try:
+        bullets = _parse_bullets(
+            client.complete(system=system, user=user),
+            mode="write",
+        )
+    except WriterError:
+        bullets = _parse_bullets(
+            client.complete(
+                system=system,
+                user=(
+                    f"{user}\n\nThe previous response failed output validation. Return a "
+                    "fresh JSON object with exactly five valid bilingual bullets."
+                ),
+            ),
+            mode="write",
+        )
     _enforce_density(bullets, product)
     return bullets
 

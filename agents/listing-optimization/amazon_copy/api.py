@@ -415,7 +415,6 @@ def _execute_chat(run: RunState, text: str) -> None:
         )
     except Exception as exc:  # noqa: BLE001 -- keep last release-ready draft available
         message = str(exc) or "终稿对话处理失败, 请重试"
-        run.chat_messages.append({"role": "assistant", "content": message})
         run.turn_status = "failed"
         run.emit("chat_error", message=message)
     finally:

@@ -89,6 +89,18 @@ class _BoundaryBreakingReviewerLLM:
         )
 
 
+class _RepairingReviewerLLM:
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.users: list[str] = []
+
+    def complete(self, system: str, user: str, **kwargs: object) -> str:
+        del system, kwargs
+        self.call_count += 1
+        self.users.append(user)
+        return "not json" if self.call_count == 1 else '{"issues":[]}'
+
+
 def test_reviewer_receives_only_listing_fields_and_builds_feedback_table() -> None:
     llm = _ReviewerLLM()
     listing = OptimizedListingCopy(
@@ -229,3 +241,19 @@ def test_reviewer_rejects_edit_that_joins_two_sentences() -> None:
     review = review_english_listing(listing, llm=_BoundaryBreakingReviewerLLM())
 
     assert review.issues == ()
+
+
+def test_reviewer_repairs_one_invalid_json_response() -> None:
+    listing = OptimizedListingCopy(
+        title="Natural River Rocks for Painting",
+        item_highlights="Smooth stones for creative projects.",
+        bullets=("Smooth Surface: Ready for painting projects.",),
+        backend_search_terms="river rocks painting craft",
+    )
+    llm = _RepairingReviewerLLM()
+
+    review = review_english_listing(listing, llm=llm)
+
+    assert review.issues == ()
+    assert llm.call_count == 2
+    assert "previous response failed validation" in llm.users[1]

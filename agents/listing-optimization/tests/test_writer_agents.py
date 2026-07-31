@@ -102,6 +102,18 @@ class _BadJsonLLM:
         return "```json\n{not valid json}\n```"
 
 
+class _RepairingTitleLLM:
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.delegate = MockLLM("title")
+
+    def complete(self, system: str, user: str, **kwargs: object) -> str:
+        self.call_count += 1
+        if self.call_count == 1:
+            return "not json"
+        return self.delegate.complete(system, user, **kwargs)
+
+
 class _PayloadLLM:
     call_count = 0
 
@@ -120,6 +132,18 @@ def test_malformed_llm_json_fails_closed(
 ) -> None:
     with pytest.raises(WriterError, match="JSON"):
         generate_titles(product, selling_points, llm=_BadJsonLLM())
+
+
+def test_generate_titles_repairs_one_invalid_json_response(
+    product: ProductInput,
+    selling_points: list[SellingPoint],
+) -> None:
+    llm = _RepairingTitleLLM()
+
+    result = generate_titles(product, selling_points, llm=llm)
+
+    assert len(result.candidates) == 5
+    assert llm.call_count == 2
 
 
 def test_generate_titles_rejects_any_non_bilingual_candidate(

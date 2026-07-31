@@ -417,22 +417,42 @@ def run_stage(
     user = _user_prompt(session, stage, research)
     image_assets = images_for_session(session.session_id) if stage == CreationStage.IMAGE_ANALYSIS else ()
     session.image_asset_count = len(image_assets)
-    raw = llm.complete(
-        system,
-        user,
-        json_mode=True,
-        images=[asset.data_url for asset in image_assets],
-    )
-    try:
-        payload = extract_json_object(raw)
-    except JsonExtractError:
+    payload: dict[str, Any] | None = None
+    contract_issues: tuple[str, ...] = ()
+    parse_failed = False
+    for attempt in range(2):
+        repair = ""
+        if attempt:
+            repair = (
+                "\nThe previous response failed the stage JSON contract. Return one fresh "
+                "JSON object only and include every field required by STAGE OUTPUT CONTRACT."
+            )
+            if contract_issues:
+                repair += " Missing or invalid: " + ", ".join(contract_issues)
+        raw = llm.complete(
+            system,
+            user + repair,
+            json_mode=True,
+            images=[asset.data_url for asset in image_assets],
+        )
+        try:
+            candidate = extract_json_object(raw)
+        except JsonExtractError:
+            parse_failed = True
+            contract_issues = ()
+            continue
+        parse_failed = False
+        contract_issues = stage_payload_issues(stage, candidate)
+        if not contract_issues:
+            payload = candidate
+            break
+
+    if payload is None and parse_failed:
         session.status = "failed"
         session.error = "stage_json_parse_failed"
         session.last_message_zh = "阶段输出解析失败，请重试。"
         return session
-
-    contract_issues = stage_payload_issues(stage, payload)
-    if contract_issues:
+    if payload is None:
         session.status = "failed"
         session.error = "stage_contract_incomplete"
         session.last_message_zh = "阶段输出未满足工作流契约：" + "、".join(contract_issues)

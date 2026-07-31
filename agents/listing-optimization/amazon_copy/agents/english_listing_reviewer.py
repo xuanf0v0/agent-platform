@@ -94,20 +94,33 @@ def review_english_listing(
             if finding.severity == "BLOCK"
         ],
     }
-    try:
-        raw = llm.complete(
-            load_prompt("english_listing_reviewer"),
-            json.dumps(payload, ensure_ascii=False),
-            temperature=0.0,
-        )
-    except Exception as error:  # isolate provider failures at agent boundary
-        message = "English listing reviewer service call failed"
-        raise EnglishListingReviewError(message) from error
-    try:
-        review = EnglishListingReview.model_validate(extract_json_object(raw))
-    except (JsonExtractError, ValueError) as error:
+    system = load_prompt("english_listing_reviewer")
+    user = json.dumps(payload, ensure_ascii=False)
+    validation_error: JsonExtractError | ValueError | None = None
+    for attempt in range(2):
+        try:
+            raw = llm.complete(
+                system,
+                user
+                + (
+                    "\n\nThe previous response failed validation. Return exactly one JSON "
+                    'object shaped as {"issues": [...]} with no extra fields.'
+                    if attempt
+                    else ""
+                ),
+                temperature=0.0,
+            )
+        except Exception as error:  # isolate provider failures at agent boundary
+            message = "English listing reviewer service call failed"
+            raise EnglishListingReviewError(message) from error
+        try:
+            review = EnglishListingReview.model_validate(extract_json_object(raw))
+            break
+        except (JsonExtractError, ValueError) as error:
+            validation_error = error
+    else:
         message = "English listing reviewer returned an invalid response"
-        raise EnglishListingReviewError(message) from error
+        raise EnglishListingReviewError(message) from validation_error
     return _actionable_review(listing, review)
 
 
