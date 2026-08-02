@@ -10,7 +10,12 @@ from amazon_copy.agents.english_listing_reviewer import (
     apply_english_review_suggestions,
     review_english_listing,
 )
-from amazon_copy.review.models import ReviewFinding
+from amazon_copy.review.bullet_tasks import DecisionTaskAssessment, DecisionTaskName
+from amazon_copy.review.models import ListingReviewRequest, MarketplaceRules, ReviewFinding
+from amazon_copy.review.service import (
+    apply_semantic_bullet_task_coverage,
+    review_listing,
+)
 from amazon_copy.schemas import OptimizedListingCopy
 
 
@@ -36,7 +41,29 @@ class _ReviewerLLM:
                         "issue_type": "truncation",
                         "suggestion": "10 Natural River Stones",
                     }
-                ]
+                ],
+                "decision_tasks": [
+                    {
+                        "task": "core_value",
+                        "covered": True,
+                        "bullet_indexes": [1],
+                        "evidence": "Includes ten pieces",
+                    },
+                    *(
+                        {
+                            "task": task,
+                            "covered": False,
+                            "bullet_indexes": [],
+                            "evidence": "",
+                        }
+                        for task in (
+                            "product_facts",
+                            "usage_fit",
+                            "scenario_outcome",
+                            "expectation_care",
+                        )
+                    ),
+                ],
             }
         )
 
@@ -117,14 +144,17 @@ def test_reviewer_receives_only_listing_fields_and_builds_feedback_table() -> No
         "item_highlights",
         "bullet_points",
         "backend_search_terms",
+        "product_type",
         "active_blocking_rules",
     }
+    assert llm.payload["product_type"] == ""
     assert llm.payload["active_blocking_rules"] == []
     assert "active_blocking_rules" in llm.system
     assert result.issues[0].issue_type == "truncation"
     table = result.as_markdown_table()
     assert "| Location | Original problem | Issue type | Improvement suggestion |" in table
     assert "10 Natural River Stones" in table
+    assert result.decision_tasks[0].task == "core_value"
 
 
 def test_reviewer_receives_current_blocking_rules_as_dynamic_context() -> None:
@@ -257,3 +287,64 @@ def test_reviewer_repairs_one_invalid_json_response() -> None:
     assert review.issues == ()
     assert llm.call_count == 2
     assert "previous response failed validation" in llm.users[1]
+
+
+def test_semantic_coverage_replaces_keyword_warning_for_vertical_product() -> None:
+    bullets = (
+        "Confidence Building: Comfortable arm wings help toddlers practice water movement.",
+        "Toddler Fit: Designed for children ages 2-6 with attached arm wings.",
+        "Simple Wear: Slide each arm through a wing and fasten the back strap.",
+        "Pool Practice: Made for supervised sessions at the pool or beach.",
+        "Adult Supervision: This training aid requires close adult supervision.",
+    )
+    report = review_listing(
+        ListingReviewRequest(
+            title="Toddler Swim Training Aid with Arm Wings",
+            item_highlights="Swim practice aid for toddlers.",
+            bullets=bullets,
+            rules=MarketplaceRules(product_type="SWIM_AID"),
+        )
+    )
+    semantic_rows: tuple[tuple[DecisionTaskName, str], ...] = (
+        ("core_value", "Comfortable arm wings help toddlers practice water movement"),
+        ("product_facts", "children ages 2-6 with attached arm wings"),
+        ("usage_fit", "Slide each arm through a wing and fasten the back strap"),
+        ("scenario_outcome", "supervised sessions at the pool or beach"),
+        ("expectation_care", "requires close adult supervision"),
+    )
+    assessments = tuple(
+        DecisionTaskAssessment(
+            task=task,
+            covered=True,
+            bullet_indexes=(index,),
+            evidence=evidence,
+        )
+        for index, (task, evidence) in enumerate(semantic_rows, start=1)
+    )
+
+    upgraded = apply_semantic_bullet_task_coverage(report, assessments)
+
+    assert not [
+        finding
+        for finding in upgraded.findings
+        if finding.code == "BULLET_TASK_COVERAGE"
+    ]
+
+
+def test_incomplete_semantic_coverage_keeps_keyword_fallback() -> None:
+    request = ListingReviewRequest(
+        title="Toddler Swim Training Aid",
+        bullets=("Pool Practice: Helps toddlers become familiar with water movement.",),
+        rules=MarketplaceRules(product_type="SWIM_AID"),
+    )
+    report = review_listing(request)
+    partial = (
+        DecisionTaskAssessment(
+            task="core_value",
+            covered=True,
+            bullet_indexes=(1,),
+            evidence="Helps toddlers become familiar with water movement",
+        ),
+    )
+
+    assert apply_semantic_bullet_task_coverage(report, partial) == report

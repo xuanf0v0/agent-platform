@@ -2,6 +2,12 @@
 
 from typing import Final, Literal
 
+from amazon_copy.review.bullet_tasks import (
+    DECISION_TASK_LABELS_ZH,
+    DECISION_TASKS,
+    DecisionTaskAssessment,
+    DecisionTaskName,
+)
 from amazon_copy.review.checks import (
     content_findings,
     field_findings,
@@ -175,4 +181,56 @@ def review_listing(request: ListingReviewRequest) -> ListingReviewReport:
     )
 
 
-__all__ = ["review_listing"]
+def apply_semantic_bullet_task_coverage(
+    report: ListingReviewReport,
+    assessments: tuple[DecisionTaskAssessment, ...],
+) -> ListingReviewReport:
+    """Replace keyword coverage with complete evidence-backed LLM semantics.
+
+    An empty, partial, duplicated, or otherwise invalid classification leaves
+    the deterministic report untouched, making model failures fail open to the
+    existing keyword heuristic instead of blocking publication.
+    """
+    if tuple(item.task for item in assessments) != DECISION_TASKS:
+        return report
+
+    covered = tuple(item for item in assessments if item.covered)
+    missing: tuple[DecisionTaskName, ...] = tuple(
+        item.task for item in assessments if not item.covered
+    )
+    findings = tuple(
+        item for item in report.findings if item.code != "BULLET_TASK_COVERAGE"
+    )
+    if missing:
+        missing_text = "、".join(DECISION_TASK_LABELS_ZH[item] for item in missing)
+        message_zh = "".join(
+            (
+                f"LLM语义判断：五点覆盖{len(covered)}/{BULLET_TASK_COUNT}类",
+                f"购买决策任务；未覆盖：{missing_text}",
+            )
+        )
+        findings = (
+            *findings,
+            finding(
+                "BULLET_TASK_COVERAGE",
+                "WARN",
+                "bullets",
+                message_zh,
+            ),
+        )
+
+    fact_findings = tuple(item for item in findings if item.code in _FACT_FINDING_CODES)
+    format_findings = tuple(item for item in findings if item.code not in _FACT_FINDING_CODES)
+    return report.model_copy(
+        update={
+            "status": _finding_status(findings),
+            "format_status": _finding_status(format_findings),
+            "fact_status": _finding_status(fact_findings),
+            "can_optimize": not any(item.severity == "BLOCK" for item in findings),
+            "findings": findings,
+            "scores": build_scores(findings),
+        }
+    )
+
+
+__all__ = ["apply_semantic_bullet_task_coverage", "review_listing"]

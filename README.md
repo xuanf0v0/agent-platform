@@ -1,5 +1,23 @@
 # Agent Platform
 
+The platform backend is powered by the reusable
+[`agent-harness`](https://github.com/xuanf0v0/my-harness). Agent definitions live
+under `harness-agents/`; the Amazon business packages remain isolated under
+`agents/`.
+
+Harness now owns environment setup, process lifecycle, health checks, logs,
+configuration and service proxying. The management API remains on port 8000,
+while the business services use ports 8501 and 8502.
+
+Useful backend operations:
+
+```bash
+curl -s http://127.0.0.1:8000/ready
+curl -s http://127.0.0.1:8000/api/agents
+curl -X POST http://127.0.0.1:8000/api/agents/listing-creation/setup
+curl -X POST http://127.0.0.1:8000/api/agents/listing-creation/start
+```
+
 ## Windows / PowerShell
 
 PowerShell does not need the backend virtual environment to be activated. From

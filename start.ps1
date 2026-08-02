@@ -168,7 +168,7 @@ try {
     if ($BackendReady) {
         $savedErrorActionPreference = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
-        & $BackendPython -m pip --version *> $null
+        & $BackendPython -c "import sys; raise SystemExit(sys.version_info < (3, 11))" *> $null
         $BackendReady = $LASTEXITCODE -eq 0
         $ErrorActionPreference = $savedErrorActionPreference
     }
@@ -178,10 +178,10 @@ try {
             Remove-Item -LiteralPath $BackendVenv -Recurse -Force
         }
         Write-Host "Creating isolated backend environment..."
-        & python -m venv $BackendVenv
+        & uv venv --python 3.11 $BackendVenv
     }
     Write-Host "Checking backend dependencies..."
-    & $BackendPython -m pip install -q -r (Join-Path $BackendDir "requirements.txt")
+    & uv pip install --python $BackendPython -q -r (Join-Path $BackendDir "requirements.txt")
 
     if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
         Write-Host "Installing frontend dependencies..."

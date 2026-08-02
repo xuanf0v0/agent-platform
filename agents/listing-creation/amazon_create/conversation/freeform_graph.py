@@ -10,6 +10,11 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from amazon_create.config import Settings
+from amazon_create.conversation.intake_parsing import (
+    extract_labeled_product_asin,
+    extract_short_asin_answer,
+    normalize_asin,
+)
 from amazon_create.llm import get_llm
 from amazon_create.research_bridge import load_asin_research_context, load_research_context
 from amazon_create.schemas.conversation import (
@@ -73,6 +78,7 @@ def build_conversation_graph(settings: Settings, checkpointer: Any) -> Any:
             text = str(action.get("text") or "").strip()
             if text:
                 state.messages.append(ConversationMessage(role="user", content=text))
+                _update_asin(state, text)
                 state.pending_user_message = text
             return _result(state)
         if action_type == "process_pending_message":
@@ -92,6 +98,7 @@ def build_conversation_graph(settings: Settings, checkpointer: Any) -> Any:
             text = str(action.get("text") or "").strip()
             if text:
                 state.messages.append(ConversationMessage(role="user", content=text))
+                _update_asin(state, text)
                 _complete_turn(state, settings)
                 _refresh_confirmed_facts(state, settings)
             return _result(state)
@@ -99,6 +106,9 @@ def build_conversation_graph(settings: Settings, checkpointer: Any) -> Any:
             title = str(action.get("title") or "").strip()
             if title:
                 state.title = title[:80]
+            return _result(state)
+        if action_type == "set_asin":
+            state.asin = normalize_asin(str(action.get("asin") or ""))
             return _result(state)
         return _result(state)
 
@@ -111,6 +121,13 @@ def build_conversation_graph(settings: Settings, checkpointer: Any) -> Any:
 
 def initial_graph_state(thread_id: str) -> ConversationGraphState:
     return ConversationGraphState(thread_id=thread_id, schema_version=3)
+
+
+def _update_asin(state: ConversationGraphState, text: str) -> None:
+    """Capture an explicitly labelled or single ASIN supplied by the user."""
+    asin = extract_labeled_product_asin(text) or extract_short_asin_answer(text)
+    if asin:
+        state.asin = asin
 
 
 def _complete_turn(state: ConversationGraphState, settings: Settings) -> None:
@@ -145,11 +162,13 @@ def _reply_context(state: ConversationGraphState, settings: Settings) -> str:
         for message in state.messages[-40:]
     )
     confirmed_facts = [fact.model_dump(mode="json") for fact in state.confirmed_facts]
-    tool_result = _run_llm_selected_tool(history, confirmed_facts, settings)
+    asin_context = f"\n\nCURRENT_PRODUCT_ASIN: {state.asin}" if state.asin else ""
+    tool_result = _run_llm_selected_tool(history, confirmed_facts, settings, asin=state.asin)
     if tool_result is None:
         return history
     return (
         history
+        + asin_context
         + "\n\nCONFIRMED_PRODUCT_FACTS_FROM_PRIOR_TURNS:\n"
         + json.dumps(confirmed_facts, ensure_ascii=False)
         + "\n\nMCP_RESEARCH_RESULT (third-party candidate facts requiring user confirmation):\n"
@@ -218,6 +237,8 @@ def _run_llm_selected_tool(
     history: str,
     confirmed_facts: list[dict[str, Any]],
     settings: Settings,
+    *,
+    asin: str = "",
 ) -> dict[str, Any] | None:
     """Let the model select at most one read-only MCP research operation."""
     decision_context = (
@@ -225,6 +246,7 @@ def _run_llm_selected_tool(
         + history
         + "\n\nCONFIRMED_PRODUCT_FACTS:\n"
         + json.dumps(confirmed_facts, ensure_ascii=False)
+        + (f"\n\nCURRENT_PRODUCT_ASIN: {asin}" if asin else "")
     )
     try:
         selected = get_llm(settings, role="review").select_tool(
@@ -238,7 +260,7 @@ def _run_llm_selected_tool(
         return None
     tool, decision = selected
     if tool == "asin_research":
-        asin = str(decision.get("asin") or "").strip().upper()
+        asin = normalize_asin(str(decision.get("asin") or "")) or asin
         marketplace = str(decision.get("marketplace") or "").strip().upper()
         if asin and marketplace:
             return {

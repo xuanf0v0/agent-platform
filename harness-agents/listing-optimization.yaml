@@ -1,0 +1,33 @@
+id: listing-optimization
+name: Listing 优化 Agent
+description: 优化现有 Amazon Listing，自动研究、重写与后检
+icon: 🔧
+cwd: ../agents/listing-optimization
+environment:
+  setup_command: [uv, sync, --frozen, --no-dev]
+  fingerprint_files: [pyproject.toml, uv.lock]
+service:
+  command: [uv, run, --frozen, uvicorn, amazon_copy.api:app, --host, 127.0.0.1, --port, "8502"]
+  port: 8502
+  health:
+    path: /health
+    timeout_seconds: 20
+env_file: .env
+config:
+  - {key: OPENAI_API_KEY, label: API Key, type: secret, default: ""}
+  - {key: OPENAI_API_BASE, label: API Base URL, type: string, default: "https://api.deepseek.com"}
+  - {key: WRITER_MODEL, label: Writer Model, type: string, default: deepseek-v4-flash}
+  - {key: REVIEW_MODEL, label: Review Model, type: string, default: deepseek-v4-flash}
+  - {key: VOTE_MODEL, label: Vote Model, type: string, default: deepseek-v4-flash}
+  - {key: MOCK, label: Mock Mode, type: boolean, default: "false"}
+  - {key: TITLE_MODE, label: Title Mode, type: select, options: [sop_seo, strict_amazon], default: sop_seo}
+  - {key: MAX_LLM_CALLS, label: Max LLM Calls, type: number, default: "12"}
+  - {key: MAX_MCP_CALLS, label: Max MCP Calls, type: number, default: "20"}
+  - {key: RUN_DEADLINE_SECONDS, label: Run Deadline, type: number, default: "120"}
+  - {key: MAX_REVIEW_ROUNDS, label: Max Review Rounds, type: number, default: "2"}
+  - {key: CHECKPOINT_PATH, label: Checkpoint Path, type: string, default: .amazon_copy/checkpoints.sqlite3}
+  - {key: LISTING_OPTIMIZE_MCP_TOKEN, label: Listing Optimize Token, type: secret, default: ""}
+  - {key: SELLERSPRITE_MCP_KEY, label: SellerSprite Key, type: secret, default: ""}
+  - {key: SORFTIME_MCP_KEY, label: Sorftime Key, type: secret, default: ""}
+  - {key: SIF_MCP_KEY, label: SIF Key, type: secret, default: ""}
+

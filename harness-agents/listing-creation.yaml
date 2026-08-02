@@ -1,0 +1,28 @@
+id: listing-creation
+name: Listing 创作 Agent
+description: 完整创建 Amazon Listing，含研究、合规、A+、类目与图片规划
+icon: ✨
+cwd: ../agents/listing-creation
+environment:
+  setup_command: [uv, sync, --frozen, --no-dev]
+  fingerprint_files: [pyproject.toml, uv.lock]
+service:
+  command: [uv, run, --frozen, uvicorn, amazon_create.api:app, --host, 127.0.0.1, --port, "8501"]
+  port: 8501
+  health:
+    path: /health
+    timeout_seconds: 20
+env_file: .env
+config:
+  - {key: OPENAI_API_KEY, label: API Key, type: secret, default: ""}
+  - {key: OPENAI_API_BASE, label: API Base URL, type: string, default: "https://api.deepseek.com"}
+  - {key: WRITER_MODEL, label: Writer Model, type: string, default: deepseek-v4-flash}
+  - {key: REVIEW_MODEL, label: Review Model, type: string, default: deepseek-v4-flash}
+  - {key: VISION_MODEL, label: Vision Model, type: string, default: ""}
+  - {key: MOCK, label: Mock Mode, type: boolean, default: "false"}
+  - {key: CHECKPOINT_PATH, label: Checkpoint Path, type: string, default: .data/listing_creation.sqlite3}
+  - {key: SELLERSPRITE_MCP_KEY, label: SellerSprite Key, type: secret, default: ""}
+  - {key: SORFTIME_MCP_KEY, label: Sorftime Key, type: secret, default: ""}
+  - {key: SIF_MCP_KEY, label: SIF Key, type: secret, default: ""}
+  - {key: REMOTE_MCP_TIMEOUT_SECONDS, label: MCP Timeout, type: number, default: "25"}
+

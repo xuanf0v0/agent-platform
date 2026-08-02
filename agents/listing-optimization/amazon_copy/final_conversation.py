@@ -39,7 +39,10 @@ from amazon_copy.review.models import (
     FactRequirement,
     ListingReviewRequest,
 )
-from amazon_copy.review.service import review_listing
+from amazon_copy.review.service import (
+    apply_semantic_bullet_task_coverage,
+    review_listing,
+)
 from amazon_copy.schemas.simple_listing import (
     OptimizedListingCopy,
     format_canonical_optimized_listing,
@@ -376,6 +379,11 @@ def _release_candidate(  # noqa: PLR0913 - explicit quality-loop inputs
                 rule_findings=tuple(
                     item for item in postflight.findings if item.severity == "BLOCK"
                 ),
+                product_type=baseline.rule_context.product_type,
+            )
+            postflight = apply_semantic_bullet_task_coverage(
+                postflight,
+                english.decision_tasks,
             )
             if english.issues:
                 candidate = apply_english_review_suggestions(candidate, english)
@@ -393,6 +401,11 @@ def _release_candidate(  # noqa: PLR0913 - explicit quality-loop inputs
                     rule_findings=tuple(
                         item for item in postflight.findings if item.severity == "BLOCK"
                     ),
+                    product_type=baseline.rule_context.product_type,
+                )
+                postflight = apply_semantic_bullet_task_coverage(
+                    postflight,
+                    english.decision_tasks,
                 )
                 english_failures = tuple(
                     " -> ".join(

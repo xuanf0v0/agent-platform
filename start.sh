@@ -46,7 +46,8 @@ BACKEND_DIR="$SCRIPT_DIR/backend"
 BACKEND_PYTHON="$BACKEND_DIR/.venv/bin/python"
 echo ""
 BACKEND_READY=false
-if [[ -x "$BACKEND_PYTHON" ]] && "$BACKEND_PYTHON" -m pip --version >/dev/null 2>&1; then
+if [[ -x "$BACKEND_PYTHON" ]] \
+    && "$BACKEND_PYTHON" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
     BACKEND_READY=true
 fi
 if [[ "$BACKEND_READY" != true ]]; then
@@ -55,12 +56,12 @@ if [[ "$BACKEND_READY" != true ]]; then
         rm -rf "$BACKEND_DIR/.venv"
     fi
     echo "📦 Creating isolated backend environment..."
-    python3 -m venv "$BACKEND_DIR/.venv"
+    uv venv --python 3.11 "$BACKEND_DIR/.venv"
 else
     echo "📦 Using isolated backend environment..."
 fi
 echo "📦 Checking backend dependencies..."
-"$BACKEND_PYTHON" -m pip install -q -r "$BACKEND_DIR/requirements.txt"
+uv pip install --python "$BACKEND_PYTHON" -q -r "$BACKEND_DIR/requirements.txt"
 
 # ── Frontend dependencies ─────────────────────────────────
 if [[ ! -d "$SCRIPT_DIR/frontend/node_modules" ]]; then
@@ -80,7 +81,10 @@ sleep 1
 # ── Frontend (Vite :5173, HMR enabled) ────────────────────
 echo ""
 echo "🎨 Starting frontend (Vite :5173)..."
-node "$SCRIPT_DIR/frontend/node_modules/vite/bin/vite.js" --host 0.0.0.0 --port 5173 &
+(
+    cd "$SCRIPT_DIR/frontend"
+    exec node "node_modules/vite/bin/vite.js" --host 0.0.0.0 --port 5173
+) &
 FRONTEND_PID=$!
 
 # ── Optional Cloudflare Quick Tunnel ───────────────────────

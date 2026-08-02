@@ -18,6 +18,22 @@ Check every field for:
 7. each supplied blocking rule; propose the smallest exact deletion or replacement
    needed to make the named field comply, using issue type `rule_compliance`.
 
+Also classify the complete Bullet Point set against five domain-neutral shopper
+decision tasks. Interpret them for the supplied `product_type`; do not rely on a
+fixed keyword list and do not require irrelevant category language:
+
+1. `core_value`: the main shopper benefit, problem solved, or differentiating value;
+2. `product_facts`: supported design, material, size, quantity, fit, age, or recipient facts;
+3. `usage_fit`: how to use, wear, install, apply, select, or determine compatibility;
+4. `scenario_outcome`: where/when it is used and the supported result the shopper can expect;
+5. `expectation_care`: package contents, limitations, supervision, maintenance, care, or
+   other expectation-setting information.
+
+A task is covered only when a Bullet explicitly communicates it. For each covered
+task, cite one exact contiguous substring copied from a supporting Bullet and its
+1-based Bullet index. Meaningful overlap is allowed: one Bullet may support more
+than one task. Do not infer missing product facts.
+
 Field-aware requirements:
 - Title may be a noun phrase and does not need terminal punctuation.
 - Bullet labels before a colon may be short noun phrases.
@@ -29,9 +45,11 @@ Field-aware requirements:
   concrete defect whose suggested wording is clearly better US English.
 
 Return strict JSON only:
-{"issues":[{"location":"Title|Item Highlights|Bullet Point N|Backend Search Terms","original":"exact problematic text","issue_type":"spelling|grammar|word_choice|unnatural_expression|truncation|us_localization|rule_compliance","suggestion":"specific corrected wording, or an empty string when the exact original must be deleted"}]}
+{"issues":[{"location":"Bullet Point N","original":"exact problematic text","issue_type":"grammar","suggestion":"exact replacement"}],"decision_tasks":[{"task":"core_value","covered":true,"bullet_indexes":[1],"evidence":"exact Bullet substring"},{"task":"product_facts","covered":false,"bullet_indexes":[],"evidence":""},{"task":"usage_fit","covered":false,"bullet_indexes":[],"evidence":""},{"task":"scenario_outcome","covered":false,"bullet_indexes":[],"evidence":""},{"task":"expectation_care","covered":false,"bullet_indexes":[],"evidence":""}]}
 
-Return {"issues":[]} only when none of these problems exists. Do not rewrite or
+Always return all five `decision_tasks` exactly once in the order shown above.
+For an uncovered task return `covered:false`, `bullet_indexes:[]`, and `evidence:""`.
+Return an empty `issues` array when no language problem exists. Do not rewrite or
 score unaffected content. Each issue must identify an exact location and actionable
 correction. The `original` value must be the smallest exact substring that needs
 editing, copied verbatim from that field. The `suggestion` value must be its direct

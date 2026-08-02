@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from amazon_copy.prompt_loader import load_prompt
+from amazon_copy.review.bullet_tasks import (
+    DecisionTaskAssessment,
+    validated_semantic_tasks,
+)
 from amazon_copy.utils.json_extract import JsonExtractError, extract_json_object
 
 if TYPE_CHECKING:
@@ -25,6 +29,11 @@ IssueType = Literal[
     "us_localization",
     "rule_compliance",
 ]
+_REPAIR_INSTRUCTION = """
+
+The previous response failed validation. Return exactly one JSON object shaped as
+{"issues": [...], "decision_tasks": [...]} with no extra fields. Include all five
+decision tasks with exact Bullet evidence for every covered task."""
 
 
 class EnglishReviewIssue(BaseModel):
@@ -44,6 +53,7 @@ class EnglishListingReview(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, extra="forbid")
 
     issues: tuple[EnglishReviewIssue, ...] = ()
+    decision_tasks: tuple[DecisionTaskAssessment, ...] = ()
 
     def as_markdown_table(self) -> str:
         """Render reviewer issues in the feedback table required by the loop."""
@@ -74,6 +84,7 @@ def review_english_listing(
     *,
     llm: LLMClient,
     rule_findings: tuple[ReviewFinding, ...] = (),
+    product_type: str = "",
 ) -> EnglishListingReview:
     """Review generated copy plus the active blocking postflight findings."""
     payload = {
@@ -81,6 +92,7 @@ def review_english_listing(
         "item_highlights": listing.item_highlights,
         "bullet_points": list(listing.bullets),
         "backend_search_terms": listing.backend_search_terms,
+        "product_type": product_type.strip(),
         "active_blocking_rules": [
             {
                 "code": finding.code,
@@ -103,8 +115,7 @@ def review_english_listing(
                 system,
                 user
                 + (
-                    "\n\nThe previous response failed validation. Return exactly one JSON "
-                    'object shaped as {"issues": [...]} with no extra fields.'
+                    _REPAIR_INSTRUCTION
                     if attempt
                     else ""
                 ),
@@ -212,7 +223,13 @@ def _actionable_review(
             continue
         seen_targets.add(target)
         actionable.append(issue.model_copy(update={"suggestion": suggestion}))
-    return EnglishListingReview(issues=tuple(actionable))
+    return EnglishListingReview(
+        issues=tuple(actionable),
+        decision_tasks=validated_semantic_tasks(
+            tuple(listing.bullets),
+            review.decision_tasks,
+        ),
+    )
 
 
 def apply_english_review_suggestions(
@@ -257,6 +274,7 @@ def apply_english_review_suggestions(
         }
     )
 __all__ = [
+    "DecisionTaskAssessment",
     "EnglishListingReview",
     "EnglishListingReviewError",
     "EnglishReviewIssue",

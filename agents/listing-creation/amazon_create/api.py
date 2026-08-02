@@ -23,6 +23,10 @@ class RenameRequest(BaseModel):
     title: str = Field(min_length=1, max_length=120)
 
 
+class AsinRequest(BaseModel):
+    asin: str = Field(default="", max_length=10)
+
+
 def _payload(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
@@ -79,6 +83,12 @@ def get_session(thread_id: str) -> Any:
 def rename_session(thread_id: str, request: RenameRequest) -> Any:
     _snapshot(thread_id)
     return _payload(_service().rename_session(thread_id, request.title))
+
+
+@app.patch("/sessions/{thread_id}/asin")
+def set_asin(thread_id: str, request: AsinRequest) -> Any:
+    _snapshot(thread_id)
+    return _payload(_service().set_asin(thread_id, request.asin))
 
 
 @app.delete("/sessions/{thread_id}", status_code=204)

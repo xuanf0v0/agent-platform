@@ -1,5 +1,1 @@
-fastapi>=0.104,<1
-uvicorn[standard]>=0.24,<1
-python-dotenv>=1,<2
-httpx>=0.27,<1
-websockets>=12,<14
+agent-harness @ git+ssh://git@github.com/xuanf0v0/my-harness.git@b1d52d30d91807d56763954c60aa484b525010da

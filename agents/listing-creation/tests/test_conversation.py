@@ -151,7 +151,7 @@ def test_v2_session_payload_continues_as_freeform_chat(tmp_path: Path) -> None:
     assert continued.state.model_dump().keys() == {
         "thread_id",
         "schema_version",
-        "title",
+        "title", "asin",
         "messages",
         "confirmed_facts",
         "pending_user_message",

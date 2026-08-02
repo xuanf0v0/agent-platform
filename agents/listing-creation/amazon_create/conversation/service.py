@@ -101,6 +101,9 @@ class ConversationService:
             self._upsert_metadata(thread_id, snapshot.state.title)
         return snapshot
 
+    def set_asin(self, thread_id: str, asin: str) -> ConversationSnapshot:
+        return self._invoke(thread_id, {"type": "set_asin", "asin": asin})
+
     def delete_session(self, thread_id: str) -> None:
         with self._lock:
             self._checkpointer.delete_thread(thread_id)

@@ -40,6 +40,7 @@ class ConversationGraphState(BaseModel):
     thread_id: str
     schema_version: int = 3
     title: str = "新建 Listing"
+    asin: str = ""
     messages: list[ConversationMessage] = Field(default_factory=list)
     confirmed_facts: list[ConfirmedFact] = Field(default_factory=list)
     pending_user_message: str = ""

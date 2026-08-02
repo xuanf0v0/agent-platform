@@ -67,7 +67,10 @@ from amazon_copy.review.models import (
     ListingReviewRequest,
     ReviewFinding,
 )
-from amazon_copy.review.service import review_listing
+from amazon_copy.review.service import (
+    apply_semantic_bullet_task_coverage,
+    review_listing,
+)
 from amazon_copy.schemas.simple_listing import (
     CopyPointsParseError,
     OptimizedListingCopy,
@@ -267,6 +270,37 @@ def _review_safe_source(
     return repaired, repaired_request, review_listing(repaired_request)
 
 
+def _semantic_source_report(
+    source: SourceListingCopy,
+    report: ListingReviewReport,
+    product_type: str,
+    dependencies: AutomaticOptimizationDependencies,
+) -> ListingReviewReport:
+    """Upgrade Stage 1 task coverage, safely retaining keyword fallback."""
+    if dependencies.llm is not None or (
+        dependencies.settings is not None and dependencies.settings.mock
+    ):
+        return report
+    listing = OptimizedListingCopy(
+        title=source.title,
+        item_highlights=source.item_highlights,
+        bullets=tuple(source.bullets),
+        backend_search_terms=source.backend_search_terms,
+    )
+    try:
+        semantic_review = review_english_listing(
+            listing,
+            llm=resolve_client(dependencies.llm, dependencies.settings),
+            product_type=product_type,
+        )
+    except (EnglishListingReviewError, SimpleOptimizerError):
+        return report
+    return apply_semantic_bullet_task_coverage(
+        report,
+        semantic_review.decision_tasks,
+    )
+
+
 def run_automatic_optimization(
     source_text: str,
     context: AutomaticOptimizationContext | None = None,
@@ -397,6 +431,12 @@ def _run_through_diagnosis(
         review_request,
         evidence,
     )
+    source_report = _semantic_source_report(
+        source,
+        source_report,
+        rule_context.product_type,
+        run_dependencies,
+    )
     writing_analysis = analyze_listing_writing(
         run_dependencies.settings,
         title=source.title,
@@ -446,6 +486,12 @@ def _run_through_diagnosis(
                 update={"fact_requirements": specialized.requirements}
             )
             source_report = review_listing(review_request)
+            source_report = _semantic_source_report(
+                source,
+                source_report,
+                rule_context.product_type,
+                run_dependencies,
+            )
             writing_analysis = analyze_listing_writing(
                 run_dependencies.settings,
                 title=source.title,
@@ -589,11 +635,6 @@ def _run_quality_gate(
     run_dependencies: AutomaticOptimizationDependencies,
 ) -> tuple[OptimizedListingCopy, ListingReviewReport, ListingDiagnosisReport]:
     """Iterate language review and revision until all editorial gates pass."""
-    _progress(run_dependencies, "语法、语义与结构诊断", 7)
-    output_diagnosis, output_writing = _diagnose_generated_listing(
-        listing, postflight, prepared, run_dependencies
-    )
-
     strict_loop = not bool(
         run_dependencies.settings and run_dependencies.settings.mock
     )
@@ -608,9 +649,18 @@ def _run_quality_gate(
                     run_dependencies.settings,
                 ),
                 rule_findings=_blocking_findings(postflight),
+                product_type=prepared.rule_context.product_type,
             )
         except EnglishListingReviewError as error:
             raise SimpleOptimizerError("英文文案审核 agent 返回无效结果") from error
+        postflight = apply_semantic_bullet_task_coverage(
+            postflight,
+            english_review.decision_tasks,
+        )
+    _progress(run_dependencies, "语法、语义与结构诊断", 7)
+    output_diagnosis, _ = _diagnose_generated_listing(
+        listing, postflight, prepared, run_dependencies
+    )
     _publish_quality_round(
         run_dependencies,
         1,
@@ -626,7 +676,6 @@ def _run_quality_gate(
     current = listing
     current_postflight = postflight
     current_diagnosis = output_diagnosis
-    current_writing = output_writing
     for _attempt in range(2, _MAX_QUALITY_ATTEMPTS + 1):
         _progress(
             run_dependencies,
@@ -661,9 +710,6 @@ def _run_quality_gate(
             )
         current = revised
         current_postflight = revised_postflight
-        current_diagnosis, current_writing = _diagnose_generated_listing(
-            current, current_postflight, prepared, run_dependencies
-        )
         try:
             _progress(run_dependencies, "美国本土化审核 Agent", 8)
             english_review = review_english_listing(
@@ -673,9 +719,17 @@ def _run_quality_gate(
                     run_dependencies.settings,
                 ),
                 rule_findings=_blocking_findings(current_postflight),
+                product_type=prepared.rule_context.product_type,
             )
         except EnglishListingReviewError as error:
             raise SimpleOptimizerError("英文文案审核 agent 返回无效结果") from error
+        current_postflight = apply_semantic_bullet_task_coverage(
+            current_postflight,
+            english_review.decision_tasks,
+        )
+        current_diagnosis, _ = _diagnose_generated_listing(
+            current, current_postflight, prepared, run_dependencies
+        )
         _publish_quality_round(
             run_dependencies,
             _attempt,
