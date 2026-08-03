@@ -1,0 +1,27 @@
+Metadata-Version: 2.4
+Name: amazon-product-research
+Version: 0.1.0
+Summary: Evidence-driven Amazon product research agent
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: anyio<5,>=4
+Requires-Dist: fastapi<1,>=0.115
+Requires-Dist: httpx<1,>=0.27
+Requires-Dist: mcp<2,>=1
+Requires-Dist: openai<3,>=1
+Requires-Dist: openpyxl<4,>=3.1
+Requires-Dist: pydantic>=2
+Requires-Dist: pydantic-settings>=2
+Requires-Dist: uvicorn<1,>=0.30
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8; extra == "dev"
+Requires-Dist: pytest-asyncio<2,>=0.23; extra == "dev"
+Requires-Dist: ruff<1,>=0.12; extra == "dev"
+
+# Amazon Product Research Agent
+
+Evidence-driven Amazon US product discovery, validation, and candidate comparison.
+
+The service is intentionally live-data only. Configure at least one marketplace
+provider key before running a research task; missing or incomplete evidence is
+reported as a gap and is never replaced with fixture data.

@@ -43,7 +43,7 @@ if ($Stop) {
         Stop-PlatformProcessTree $launcher.ProcessId
         $stopped = $true
     }
-    foreach ($portNumber in 8000, 5173, 8501, 8502, 20241) {
+    foreach ($portNumber in 8000, 5173, 8501, 8502, 8503, 20241) {
         foreach ($listener in @(Get-NetTCPConnection -LocalPort $portNumber -State Listen -ErrorAction SilentlyContinue)) {
             Write-Host "Stopping listener on port $portNumber (PID $($listener.OwningProcess))..."
             Stop-PlatformProcessTree $listener.OwningProcess
@@ -125,7 +125,7 @@ function Stop-PreviousPlatformLaunchers {
 }
 
 function Stop-PlatformListeners {
-    $platformPorts = 8000, 5173, 8501, 8502, 20241
+    $platformPorts = 8000, 5173, 8501, 8502, 8503, 20241
     foreach ($portNumber in $platformPorts) {
         $listeners = Get-NetTCPConnection -LocalPort $portNumber -State Listen -ErrorAction SilentlyContinue
         foreach ($listener in $listeners) {

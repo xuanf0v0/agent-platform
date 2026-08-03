@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+amazon_product_research/__init__.py
+amazon_product_research/api.py
+amazon_product_research/config.py
+amazon_product_research/models.py
+amazon_product_research/providers.py
+amazon_product_research/report.py
+amazon_product_research/scoring.py
+amazon_product_research/store.py
+amazon_product_research.egg-info/PKG-INFO
+amazon_product_research.egg-info/SOURCES.txt
+amazon_product_research.egg-info/dependency_links.txt
+amazon_product_research.egg-info/requires.txt
+amazon_product_research.egg-info/top_level.txt
+tests/test_api.py
+tests/test_scoring.py

@@ -1,0 +1,20 @@
+id: product-research
+name: Amazon 选品 Agent
+description: 基于真实市场与供应链证据发现、验证和比较 Amazon 产品机会
+icon: 🔍
+cwd: ../agents/product-research
+environment:
+  setup_command: [uv, sync, --frozen, --no-dev]
+  fingerprint_files: [pyproject.toml, uv.lock]
+service:
+  command: [uv, run, --frozen, uvicorn, amazon_product_research.api:app, --host, 127.0.0.1, --port, "8503"]
+  port: 8503
+  health:
+    path: /health
+    timeout_seconds: 25
+env_file: .env
+config:
+  - {key: PRODUCT_RESEARCH_MCP_TIMEOUT_SECONDS, label: MCP Timeout, type: number, default: "35"}
+  - {key: PRODUCT_RESEARCH_MAX_MCP_CALLS, label: Max MCP Calls, type: number, default: "60"}
+  - {key: PRODUCT_RESEARCH_DEADLINE_SECONDS, label: Run Deadline, type: number, default: "300"}
+  - {key: PRODUCT_RESEARCH_CHECKPOINT_PATH, label: Checkpoint Path, type: string, default: .product_research/runs.sqlite3}

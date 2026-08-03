@@ -7,7 +7,7 @@ under `harness-agents/`; the Amazon business packages remain isolated under
 
 Harness now owns environment setup, process lifecycle, health checks, logs,
 configuration and service proxying. The management API remains on port 8000,
-while the business services use ports 8501 and 8502.
+while the business services use ports 8501, 8502 and 8503.
 
 Useful backend operations:
 

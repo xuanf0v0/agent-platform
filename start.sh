@@ -23,7 +23,7 @@ echo "  🤖 Agent Manager"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ── Kill old processes on both ports ──────────────────────
-for PORT in 8000 5173 8501 8502; do
+for PORT in 8000 5173 8501 8502 8503; do
     OLD_PIDS=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null || true)
     for OLD_PID in $OLD_PIDS; do
         OLD_PGID=$(ps -o pgid= -p "$OLD_PID" 2>/dev/null | tr -d ' ' || true)

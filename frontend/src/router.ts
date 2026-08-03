@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import DashboardPage from './pages/DashboardPage.vue'
 import CreationPage from './pages/CreationPage.vue'
 import OptimizationPage from './pages/OptimizationPage.vue'
+import ProductResearchPage from './pages/ProductResearchPage.vue'
 import { api } from './api/client'
 
 const router = createRouter({
@@ -10,6 +11,7 @@ const router = createRouter({
     { path: '/', component: DashboardPage },
     { path: '/agents/listing-creation', component: CreationPage, meta: { agent: 'listing-creation' } },
     { path: '/agents/listing-optimization', component: OptimizationPage, meta: { agent: 'listing-optimization' } },
+    { path: '/agents/product-research', component: ProductResearchPage, meta: { agent: 'product-research' } },
   ],
 })
 
