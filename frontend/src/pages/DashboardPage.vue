@@ -20,7 +20,7 @@ async function open(agent: AgentInfo) { if (agent.status !== 'running') { await 
     <div class="agent-grid">
       <article v-for="agent in store.agents" :key="agent.id" class="agent-card glass-panel">
         <div class="agent-head"><div class="agent-icon">{{ agent.icon }}</div><span class="status" :class="agent.status"><i />{{ agent.status }}</span></div>
-        <h3>{{ agent.name_zh }}</h3><p>{{ agent.description }}</p>
+        <h3>{{ agent.name }}</h3><p>{{ agent.description }}</p>
         <div class="agent-meta"><span>PORT {{ agent.port }}</span><span v-if="agent.pid">PID {{ agent.pid }}</span></div>
         <div class="agent-actions"><button class="btn primary" @click="open(agent)">{{ agent.status === 'running' ? '进入工作台' : '启动并进入' }}</button><button v-if="agent.status === 'running'" class="btn danger" @click="store.toggle(agent)">停止</button><button class="btn ghost" @click="expanded = expanded === agent.id ? '' : agent.id">设置</button></div>
         <AgentSettings v-if="expanded === agent.id" :agent-id="agent.id" :running="agent.status === 'running'" />

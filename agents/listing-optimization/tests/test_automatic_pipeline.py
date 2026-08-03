@@ -10,7 +10,7 @@ import pytest
 from amazon_copy.automatic_models import CompletedOptimization, NeedsClarification
 from amazon_copy.config import Settings
 from amazon_copy.mcp.live_research import McpToolSnapshot, normalize_tool_payload
-from amazon_copy.review.models import EvidenceSource, FactClaim
+from amazon_copy.review.models import ClarificationQuestion, EvidenceSource, FactClaim
 if TYPE_CHECKING:
     from typing import Literal
     from amazon_copy.llm.base import LLMClient
@@ -468,7 +468,85 @@ def test_painting_rock_uses_five_bullet_upload_shape() -> None:
     assert 'garden markers or desk decorations' in joined
 
 
-def test_final_release_gate_rejects_bullet_count_changed_after_generation(
+def test_bullet_evidence_gap_pauses_before_language_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    fetcher = _ResearchFetcher(events)
+    llm = _ScenarioLLM(events)
+    quality_rounds: list[tuple[int, tuple[str, ...], bool]] = []
+    truncate = True
+
+    def truncate_polish(
+        _settings: Settings | None,
+        listing: OptimizedListingCopy,
+    ) -> OptimizedListingCopy:
+        if truncate:
+            return listing.model_copy(update={"bullets": listing.bullets[:3]})
+        return listing
+
+    monkeypatch.setattr(
+        "amazon_copy.automatic_pipeline.polish_listing_with_editor",
+        truncate_polish,
+    )
+    result = optimizer.run_automatic_optimization(
+        ROCKS_SOURCE,
+        context=optimizer.AutomaticOptimizationContext(
+            marketplace="US",
+            auto_resolve_unverified=True,
+            skip_approval=True,
+        ),
+        dependencies=optimizer.AutomaticOptimizationDependencies(
+            settings=Settings(mock=True),
+            llm=llm,
+            research_fetcher=fetcher,
+            quality_callback=lambda attempt, _total, reasons, passed: quality_rounds.append(
+                (attempt, reasons, passed)
+            ),
+        ),
+    )
+
+    assert isinstance(result, NeedsClarification)
+    assert result.questions[0].finding_code == "BULLET_EVIDENCE_GAP"
+    assert "至少 2 个" in result.questions[0].question_zh
+    assert "按现有 3 条继续" in result.questions[0].question_zh
+    assert quality_rounds == []
+
+    truncate = False
+    question = result.questions[0]
+    resumed = optimizer.run_automatic_optimization(
+        ROCKS_SOURCE,
+        context=optimizer.AutomaticOptimizationContext(
+            rule_context=result.rule_context,
+            user_claims=result.evidence_bundle.user_claims,
+            suppressed_claim_terms=result.evidence_bundle.suppressed_claim_terms,
+            allowed_keywords=result.evidence_bundle.allowed_keywords,
+            clarification_questions=result.questions,
+            clarification_answers=(
+                optimizer.ClarificationAnswer(
+                    question_code=question.code,
+                    action="confirm",
+                    value=(
+                        "The package includes a storage pouch; clean the stones with a dry cloth"
+                    ),
+                ),
+            ),
+            cached_research=result.research_cache,
+            cached_specialized_rules=result.specialized_rule_cache,
+            skip_approval=True,
+        ),
+        dependencies=_dependencies(fetcher, llm),
+    )
+
+    assert isinstance(resumed, CompletedOptimization)
+    assert any(
+        claim.key == "additional_bullet_facts"
+        for claim in resumed.evidence_bundle.user_claims
+    )
+    assert "additional_bullet_facts" in llm.payloads[-1]["verified_facts"]
+
+
+def test_bullet_evidence_gap_may_release_existing_safe_bullets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
@@ -485,18 +563,31 @@ def test_final_release_gate_rejects_bullet_count_changed_after_generation(
         "amazon_copy.automatic_pipeline.polish_listing_with_editor",
         truncate_polish,
     )
+    question = ClarificationQuestion(
+        code="postflight_bullet_evidence_gap",
+        finding_code="BULLET_EVIDENCE_GAP",
+        fact_key="additional_bullet_facts",
+        question_zh="请补充事实",
+        evidence_needed="卖家确认",
+    )
     result = optimizer.run_automatic_optimization(
         ROCKS_SOURCE,
         context=optimizer.AutomaticOptimizationContext(
             marketplace="US",
             skip_approval=True,
+            clarification_questions=(question,),
+            clarification_answers=(
+                optimizer.ClarificationAnswer(
+                    question_code=question.code,
+                    action="remove",
+                ),
+            ),
         ),
         dependencies=_dependencies(fetcher, llm),
     )
 
-    assert result.status == "failed"
-    assert result.message == "终稿要点数量未通过发布门禁"
-    assert "candidate contains 3" in result.quality_failures[0]
+    assert isinstance(result, CompletedOptimization)
+    assert len(result.listing.bullets) == 3
 
 @pytest.mark.parametrize(('action', 'answer_value'), [('confirm', 'checked against the priority-1 rule'), ('remove', '')])
 def test_priority_conflict_resume_suppresses_exact_lower_claim(action: Literal['confirm', 'remove'], answer_value: str) -> None:

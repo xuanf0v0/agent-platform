@@ -37,7 +37,10 @@ from amazon_copy.automatic_models import (
     ProductIdentity,
     RuleContext,
 )
-from amazon_copy.automatic_postflight import postflight_questions
+from amazon_copy.automatic_postflight import (
+    bullet_evidence_questions,
+    postflight_questions,
+)
 from amazon_copy.automatic_research import (
     AutomaticResearchRequest,
     load_research_cache,
@@ -116,12 +119,11 @@ def _progress(
 
 
 def _quality_failure_reasons(
-    diagnosis: ListingDiagnosisReport,
     english_review: EnglishListingReview,
     postflight: ListingReviewReport,
+    structure_reasons: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """Return language and blocking release-rule failures for this round."""
-    del diagnosis
+    """Return language, blocking-rule, and release-structure failures."""
     english_reasons = tuple(
         f"{issue.location} [{issue.issue_type}]: "
         f"{issue.original} -> {issue.suggestion}"
@@ -131,7 +133,20 @@ def _quality_failure_reasons(
         f"{finding.field} [rule:{finding.code}]: {finding.message_zh}"
         for finding in _blocking_findings(postflight)
     )
-    return (*english_reasons, *rule_reasons)
+    return (*english_reasons, *rule_reasons, *structure_reasons)
+
+
+def _release_structure_failures(
+    listing: OptimizedListingCopy,
+    expected_bullets: int,
+) -> tuple[str, ...]:
+    """Return non-negotiable output-shape failures omitted by advisory rules."""
+    if len(listing.bullets) == expected_bullets:
+        return ()
+    return (
+        f"Bullet count must be exactly {expected_bullets}; "
+        f"final candidate contains {len(listing.bullets)}.",
+    )
 
 
 def _blocking_findings(postflight: ListingReviewReport) -> tuple[ReviewFinding, ...]:
@@ -144,14 +159,39 @@ def _blocking_findings(postflight: ListingReviewReport) -> tuple[ReviewFinding, 
 def _publish_quality_round(
     dependencies: AutomaticOptimizationDependencies,
     attempt: int,
-    diagnosis: ListingDiagnosisReport,
     english_review: EnglishListingReview,
     postflight: ListingReviewReport,
-) -> None:
-    reasons = _quality_failure_reasons(diagnosis, english_review, postflight)
+    structure_reasons: tuple[str, ...],
+) -> tuple[str, ...]:
+    reasons = _quality_failure_reasons(
+        english_review,
+        postflight,
+        structure_reasons,
+    )
     callback = dependencies.quality_callback
     if callback is not None:
         callback(attempt, _MAX_QUALITY_ATTEMPTS, reasons, not reasons)
+    return reasons
+
+
+def _quality_round_succeeded_or_raise(
+    english_review: EnglishListingReview,
+    candidate: OptimizedListingCopy,
+    postflight: ListingReviewReport,
+    failures: tuple[str, ...],
+) -> bool:
+    """Return success, continue editable failures, or stop on structural failure."""
+    if not failures:
+        return True
+    if english_review.issues or _blocking_findings(postflight):
+        return False
+    message = "最终候选未通过发布结构门禁"
+    raise _QualityGateExhausted(
+        message,
+        candidate=candidate,
+        postflight=postflight,
+        failures=failures,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +227,7 @@ class _PreparedDiagnosis:
     identity: ProductIdentity | None
     funnel_hypotheses: tuple[FunnelHypothesis, ...]
     fingerprint: str
+    allow_partial_bullets: bool = False
 
 
 def _needs_clarification(state: _ClarificationState) -> NeedsClarification:
@@ -543,6 +584,11 @@ def _run_through_diagnosis(
         identity=identity,
         funnel_hypotheses=funnel_hypotheses,
         fingerprint=fingerprint,
+        allow_partial_bullets=any(
+            answer.question_code == "postflight_bullet_evidence_gap"
+            and answer.action == "remove"
+            for answer in run_context.clarification_answers
+        ),
     )
 
 
@@ -633,8 +679,15 @@ def _run_quality_gate(
     postflight: ListingReviewReport,
     prepared: _PreparedDiagnosis,
     run_dependencies: AutomaticOptimizationDependencies,
+    *,
+    expected_bullets: int | None = None,
 ) -> tuple[OptimizedListingCopy, ListingReviewReport, ListingDiagnosisReport]:
     """Iterate language review and revision until all editorial gates pass."""
+    expected_bullets = (
+        expected_bullets
+        if expected_bullets is not None
+        else prepared.rule_context.rules.supported_bullet_count
+    )
     strict_loop = not bool(
         run_dependencies.settings and run_dependencies.settings.mock
     )
@@ -661,16 +714,21 @@ def _run_quality_gate(
     output_diagnosis, _ = _diagnose_generated_listing(
         listing, postflight, prepared, run_dependencies
     )
-    _publish_quality_round(
+    round_failures = _publish_quality_round(
         run_dependencies,
         1,
-        output_diagnosis,
         english_review,
         postflight,
+        _release_structure_failures(listing, expected_bullets),
     )
     if not strict_loop and _grammar_score(output_diagnosis) >= _GRAMMAR_SCORE_THRESHOLD:
         return listing, postflight, output_diagnosis
-    if not english_review.issues and not _blocking_findings(postflight):
+    if _quality_round_succeeded_or_raise(
+        english_review,
+        listing,
+        postflight,
+        round_failures,
+    ):
         return listing, postflight, output_diagnosis
 
     current = listing
@@ -730,21 +788,26 @@ def _run_quality_gate(
         current_diagnosis, _ = _diagnose_generated_listing(
             current, current_postflight, prepared, run_dependencies
         )
-        _publish_quality_round(
+        round_failures = _publish_quality_round(
             run_dependencies,
             _attempt,
-            current_diagnosis,
             english_review,
             current_postflight,
+            _release_structure_failures(current, expected_bullets),
         )
-        if not english_review.issues and not _blocking_findings(current_postflight):
+        if _quality_round_succeeded_or_raise(
+            english_review,
+            current,
+            current_postflight,
+            round_failures,
+        ):
             return current, current_postflight, current_diagnosis
 
     remaining = list(
         _quality_failure_reasons(
-            current_diagnosis,
             english_review,
             current_postflight,
+            _release_structure_failures(current, expected_bullets),
         )
     )
     detail = "\n".join(f"- {item}" for item in remaining[:12])
@@ -763,6 +826,8 @@ def _run_deterministic_safety_gate(
     listing: OptimizedListingCopy,
     prepared: _PreparedDiagnosis,
     run_dependencies: AutomaticOptimizationDependencies,
+    *,
+    allow_partial_bullets: bool = False,
 ) -> tuple[OptimizedListingCopy, ListingReviewReport]:
     """Clean one candidate and regenerate once if cleanup removes a bullet."""
     expected_bullets = prepared.rule_context.rules.supported_bullet_count
@@ -794,7 +859,11 @@ def _run_deterministic_safety_gate(
                     prepared.review_request,
                 )
             )
-        if len(listing.bullets) == expected_bullets or safety_attempt == 1:
+        if (
+            allow_partial_bullets
+            or len(listing.bullets) == expected_bullets
+            or safety_attempt == 1
+        ):
             return listing, postflight
 
         # Deterministic removal can delete a whole unsupported bullet. Ask the
@@ -874,11 +943,43 @@ def _run_optimize_from_prepared(
         listing,
         prepared,
         run_dependencies,
+        allow_partial_bullets=prepared.allow_partial_bullets,
+    )
+    if (
+        len(listing.bullets) < expected_bullets
+        and not prepared.allow_partial_bullets
+    ):
+        return NeedsClarification(
+            questions=bullet_evidence_questions(
+                len(listing.bullets),
+                expected_bullets,
+            ),
+            source_review=prepared.source_report,
+            postflight_review=postflight,
+            rule_context=prepared.rule_context,
+            evidence_bundle=prepared.evidence,
+            research_cache=prepared.cache,
+            cache_reused=prepared.cache_reused,
+            specialized_rule_cache=prepared.specialized.cache,
+            specialized_cache_reused=prepared.specialized.cache_reused,
+            specialized_rule_guidance=prepared.specialized.guidance,
+            diagnosis_report=prepared.diagnosis_report,
+            identity=prepared.identity,
+            funnel_hypotheses=prepared.funnel_hypotheses,
+        )
+    quality_bullet_count = (
+        len(listing.bullets)
+        if prepared.allow_partial_bullets
+        else expected_bullets
     )
     # Quality gate: diagnose output grammar/structure, re-optimize if poor.
     try:
         listing, postflight, _output_diagnosis = _run_quality_gate(
-            listing, postflight, prepared, run_dependencies
+            listing,
+            postflight,
+            prepared,
+            run_dependencies,
+            expected_bullets=quality_bullet_count,
         )
     except _QualityGateExhausted as error:
         return FailedOptimization(
@@ -933,7 +1034,10 @@ def _run_optimize_from_prepared(
             identity=prepared.identity,
             funnel_hypotheses=prepared.funnel_hypotheses,
         )
-    if len(listing.bullets) != expected_bullets:
+    if (
+        len(listing.bullets) != expected_bullets
+        and not prepared.allow_partial_bullets
+    ):
         failure = (
             f"Bullet count must be exactly {expected_bullets}; "
             f"final candidate contains {len(listing.bullets)}."

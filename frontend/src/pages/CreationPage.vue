@@ -38,10 +38,10 @@ onMounted(async () => { await loadSessions(); const remembered = localStorage.ge
 
 <style scoped>
 .facts h3 { display: flex; align-items: center; justify-content: space-between; }
-.facts h3 span { min-width: 24px; padding: 2px 7px; border-radius: 12px; background: rgba(67, 223, 252, .1); color: var(--cyan); font: 10px monospace; text-align: center; }
+.facts h3 span { min-width: 24px; padding: 2px 7px; border-radius: 12px; background: hsl(0 0% 100% / .08); color: hsl(0 0% 100% / .76); font: 10px monospace; text-align: center; }
 .fact { grid-template-columns: 22px 1fr; }
-.fact-check { color: #63e6b5; font-size: 13px; }
-.fact small { display: block; color: #456779; font-size: 9px; margin-top: 4px; }
-.context-panel { border-radius: 20px; padding: 22px; overflow: auto; }
+.fact-check { color: hsl(0 0% 100% / .76); font-size: 13px; }
+.fact small { display: block; color: var(--subtle); font-size: 9px; margin-top: 4px; }
+.context-panel { border-radius: 28px; padding: 22px; overflow: auto; }
 .context-panel .facts { border-top: 0; margin-top: 0; padding-top: 0; }
 </style>

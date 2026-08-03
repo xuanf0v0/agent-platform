@@ -520,6 +520,10 @@ def test_review_context_expands_to_supported_bullets_and_preserves_keywords() ->
     # Then: the marketplace upload count and allowed terms reach generation
     payload = json.loads(llm.users[0])
     assert payload["target_bullet_count"] == 5
+    assert len(payload["bullet_planning_contract"]["decision_jobs"]) == 5
+    assert "exact source_listing or verified_facts evidence" in payload[
+        "bullet_planning_contract"
+    ]["instruction"]
     assert len(result.bullets) == 5
     assert payload["allowed_keywords"] == ["painting rocks", "river rocks", "craft stones"]
     assert result.backend_search_terms == "painting rocks river craft stones"

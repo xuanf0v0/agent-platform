@@ -35,6 +35,11 @@ def test_harness_management_api_lists_platform_agents(tmp_path: Path) -> None:
             "listing-optimization",
             "product-research",
         }
+        assert {item["name"] for item in payload} == {
+            "Listing 创作 Agent",
+            "Listing 优化 Agent",
+            "Amazon 选品 Agent",
+        }
         assert client.get("/api/agents/listing-creation/config").status_code == 200
         assert client.get("/api/agents/listing-creation/service/health").status_code == 503
 

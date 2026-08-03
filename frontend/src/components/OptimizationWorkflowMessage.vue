@@ -14,8 +14,8 @@ defineProps<{ message: any }>()
       <template v-if="message.status === 'needs_clarification'">
         <span class="history-tag">历史记录 · 事实确认</span><h3>需要确认产品事实</h3>
         <div v-for="question in message.result?.questions || []" :key="question.code" class="question">
-          <b>{{ question.prompt_zh || question.question || question.code }}</b>
-          <p>{{ question.reason_zh || question.reason }}</p>
+          <b>{{ question.question_zh || question.prompt_zh || question.question || question.code }}</b>
+          <p>{{ question.evidence_needed || question.reason_zh || question.reason }}</p>
         </div>
       </template>
       <template v-else-if="message.status === 'awaiting_approval'">
@@ -35,5 +35,5 @@ defineProps<{ message: any }>()
 </template>
 
 <style scoped>
-.history-tag { display: inline-block; margin-bottom: 10px; color: #7f9caf; font: 10px monospace; }
+.history-tag { display: inline-block; margin-bottom: 10px; color: var(--muted); font: 10px monospace; }
 </style>

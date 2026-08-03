@@ -8,10 +8,10 @@ authoritative.
 ## E-commerce Visual Copywriting Skill
 
 - Upstream: `https://github.com/feichanggege/ecommerce-visual-copywriting-skill`
-- License: MIT
-- Upstream commit: `UNRESOLVED`
-- Retrieval status: the exact commit query was blocked by the execution environment's network
-  approval service on 2026-08-03; do not replace this marker with a branch name or date.
+- License: MIT; archived at `docs/licenses/ecommerce-visual-copywriting-skill-LICENSE.txt`
+- Upstream commit: `38736d1ca30ee3b96d7015a16594e6c351ec3610`
+- Provenance captured: 2026-08-03 from the repository's `HEAD`; the archived license was retrieved
+  from that exact commit.
 - Local adaptation: Amazon-only Campaign Style Lock, verified
   `Feature -> Advantage -> Buyer Benefit -> Evidence`, storyboard approval gate, main image plus
   seven secondary-image task allocation, and five independent visual reviews. China-marketplace
@@ -24,10 +24,10 @@ authoritative.
 
 - Upstream: `https://github.com/coreyhaines31/marketingskills`
 - Upstream resource: `skills/copy-editing/SKILL.md`
-- License: MIT
-- Upstream commit: `UNRESOLVED`
-- Retrieval status: the exact commit query was blocked by the execution environment's network
-  approval service on 2026-08-03; do not replace this marker with a branch name or date.
+- License: MIT; archived at `docs/licenses/marketingskills-LICENSE.txt`
+- Upstream commit: `7868cb9251fad80a73d26e488a5ad5f6c4a9f335`
+- Provenance captured: 2026-08-03 from the repository's `HEAD`; the archived license was retrieved
+  from that exact commit.
 - Local adaptation: seven read-only editorial sweep scores mapped from the existing ten-dimension
   diagnosis and postflight reports. No upstream prose, agent framework, or automatic rewrite path
   is included.
@@ -36,6 +36,5 @@ authoritative.
 
 ## License Handling
 
-Both upstream repositories advertise the MIT License. Before release, resolve each exact commit and
-archive the corresponding upstream `LICENSE` text and copyright notice alongside this document.
-The unresolved markers intentionally block claiming provenance that was not verified.
+Both exact upstream commits contain the MIT License. Their complete copyright and permission
+notices are archived unchanged under `docs/licenses/`; retain those files with this adaptation.

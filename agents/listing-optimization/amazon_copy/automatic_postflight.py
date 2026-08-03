@@ -11,6 +11,32 @@ from amazon_copy.review.models import (
     ListingReviewReport,
 )
 
+_BULLET_EVIDENCE_GAP = "BULLET_EVIDENCE_GAP"
+
+
+def bullet_evidence_questions(
+    current_count: int,
+    target_count: int,
+) -> tuple[ClarificationQuestion, ...]:
+    """Ask once for the exact evidence gap instead of inventing filler bullets."""
+    missing = max(0, target_count - current_count)
+    if missing == 0:
+        return ()
+    return (
+        ClarificationQuestion(
+            code="postflight_bullet_evidence_gap",
+            finding_code=_BULLET_EVIDENCE_GAP,
+            fact_key="additional_bullet_facts",
+            question_zh=(
+                f"安全清理后只保留 {current_count}/{target_count} 条 Bullet。请补充至少 "
+                f"{missing} 个尚未出现且可核实的产品事实，例如材质/结构、尺寸或调节范围、"
+                "包装配件、安装方式、适用范围、护理或使用限制，并写明具体值。"
+                f"如果无法确认，可回复“按现有 {current_count} 条继续”，系统不会编造补齐。"
+            ),
+            evidence_needed="卖家确认、包装/BOM、说明书或其他本品一方资料",
+        ),
+    )
+
 
 def postflight_questions(report: ListingReviewReport) -> tuple[ClarificationQuestion, ...]:
     """Convert remaining postflight blocks into conversational questions."""
@@ -55,7 +81,10 @@ def apply_postflight_answers(
                     )
                 )
             case "remove":
-                suppressed.extend(question.claim_terms)
+                if question.finding_code == _BULLET_EVIDENCE_GAP:
+                    retained_answers.append(answer)
+                else:
+                    suppressed.extend(question.claim_terms)
     return context.model_copy(
         update={
             "user_claims": tuple(claims),
@@ -65,4 +94,8 @@ def apply_postflight_answers(
     )
 
 
-__all__ = ["apply_postflight_answers", "postflight_questions"]
+__all__ = [
+    "apply_postflight_answers",
+    "bullet_evidence_questions",
+    "postflight_questions",
+]

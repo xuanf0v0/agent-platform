@@ -149,6 +149,24 @@ def build_user_payload(
         "original_source_text": original,
         "source_listing": source.model_dump(mode="json", exclude={"format_template"}),
         "target_bullet_count": context.expected_bullets,
+        "bullet_planning_contract": {
+            "instruction": (
+                "Before drafting, silently map every bullet to one distinct buyer decision "
+                "and to exact source_listing or verified_facts evidence. Do not expose the "
+                "plan or invent a fact."
+            ),
+            "decision_jobs": [
+                "core identity or primary outcome",
+                "construction, specification, or differentiating proof",
+                "fit, compatibility, setup, or primary use",
+                "supported scenario or secondary buyer outcome",
+                "contents, care, limitation, or expectation management",
+            ][: context.expected_bullets],
+            "evidence_rule": (
+                "Each job needs different supporting evidence; splitting is allowed only when "
+                "the source contains enough independent facts."
+            ),
+        },
         "prior_layers": [
             "original_source_text",
             "source_listing",

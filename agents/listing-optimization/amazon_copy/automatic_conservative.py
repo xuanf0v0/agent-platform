@@ -117,6 +117,11 @@ def run_conservatively(request: ConservativeRunRequest) -> AutomaticOptimization
             result, NeedsClarification
         ):
             return result
+        if any(
+            question.finding_code == "BULLET_EVIDENCE_GAP"
+            for question in result.questions
+        ):
+            return result
         last_clarification = result
         run_context = conservative_resume_context(result, active_context)
     if last_clarification is None:

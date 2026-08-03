@@ -3,9 +3,7 @@
 export interface AgentInfo {
   id: string;
   name: string;
-  name_zh: string;
   description: string;
-  description_en: string;
   icon: string;
   port: number;
   status: 'stopped' | 'starting' | 'running' | 'error';
