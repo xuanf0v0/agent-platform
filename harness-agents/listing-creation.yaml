@@ -19,7 +19,6 @@ config:
   - {key: WRITER_MODEL, label: Writer Model, type: string, default: deepseek-v4-flash}
   - {key: REVIEW_MODEL, label: Review Model, type: string, default: deepseek-v4-flash}
   - {key: VISION_MODEL, label: Vision Model, type: string, default: ""}
-  - {key: MOCK, label: Mock Mode, type: boolean, default: "false"}
   - {key: CHECKPOINT_PATH, label: Checkpoint Path, type: string, default: .data/listing_creation.sqlite3}
   - {key: SELLERSPRITE_MCP_KEY, label: SellerSprite Key, type: secret, default: ""}
   - {key: SORFTIME_MCP_KEY, label: Sorftime Key, type: secret, default: ""}

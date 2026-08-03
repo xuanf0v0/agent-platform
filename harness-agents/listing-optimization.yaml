@@ -19,7 +19,6 @@ config:
   - {key: WRITER_MODEL, label: Writer Model, type: string, default: deepseek-v4-flash}
   - {key: REVIEW_MODEL, label: Review Model, type: string, default: deepseek-v4-flash}
   - {key: VOTE_MODEL, label: Vote Model, type: string, default: deepseek-v4-flash}
-  - {key: MOCK, label: Mock Mode, type: boolean, default: "false"}
   - {key: TITLE_MODE, label: Title Mode, type: select, options: [sop_seo, strict_amazon], default: sop_seo}
   - {key: MAX_LLM_CALLS, label: Max LLM Calls, type: number, default: "12"}
   - {key: MAX_MCP_CALLS, label: Max MCP Calls, type: number, default: "20"}

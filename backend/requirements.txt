@@ -1,1 +1,1 @@
-agent-harness @ git+ssh://git@github.com/xuanf0v0/my-harness.git@b1d52d30d91807d56763954c60aa484b525010da
+agent-harness @ git+https://github.com/xuanf0v0/my-harness.git@b1d52d30d91807d56763954c60aa484b525010da
