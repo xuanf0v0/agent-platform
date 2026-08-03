@@ -8,6 +8,45 @@ import OptimizationWorkflowMessage from '../components/OptimizationWorkflowMessa
 const source = ref(''); const run = ref<any>(); const runs = ref<any[]>([]); const input = ref(''); const pendingMessage = ref(''); const processing = ref(false); const progress = ref(''); const progressStep = ref(0); const progressTotal = ref(8); const rounds = ref<any[]>([]); const error = ref(''); const historyOpen = ref(true); const chat = ref<HTMLElement>()
 const result = computed(() => run.value?.result); const status = computed(() => run.value?.status || 'idle')
 const chatEnabled = computed(() => Boolean(run.value?.chat_enabled && status.value === 'completed'))
+const completionSummary = computed(() => {
+  const current = result.value
+  if (!current) return '终稿已生成，可在右侧查看或复制。'
+
+  const report = current.diagnosis_report
+  const score = Number(report?.average_score)
+  const scoreText = Number.isFinite(score) ? score.toFixed(1).replace(/\.0$/, '') : ''
+  const scoreMap = new Map<string, number>()
+  for (const item of report?.scores || []) scoreMap.set(String(item.dimension), Number(item.score))
+  const coreDimensionsPass = ['compliance', 'grammar', 'readability'].every((dimension) => (scoreMap.get(dimension) ?? 0) >= 8)
+  const opening = Number.isFinite(score) && score >= 8.5 && coreDimensionsPass
+    ? `当前文案整体质量良好，合规、语法、可读性等维度均无明显问题，平均得分 ${scoreText}。`
+    : Number.isFinite(score)
+      ? `当前文案已通过发布门禁，综合平均得分 ${scoreText}；仍有进一步优化空间。`
+      : '当前文案已通过发布门禁。'
+
+  const suggestions: string[] = []
+  const actualBullets = current.listing?.bullets?.length
+  const supportedBullets = current.rule_context?.rules?.supported_bullet_count
+  if (Number.isFinite(actualBullets) && Number.isFinite(supportedBullets) && actualBullets < supportedBullets) {
+    suggestions.push(`类目支持 ${supportedBullets} 条五点，目前只有 ${actualBullets} 条，建议补充第 ${actualBullets + 1} 条以覆盖更多购买决策场景`)
+  }
+
+  const duplication = Number(report?.backend?.duplication_pct)
+  if (Number.isFinite(duplication) && duplication >= 25) {
+    suggestions.push(`后台搜索词与可见字段重复率约 ${Math.round(duplication)}%，建议去重，仅保留增量词以提升搜索覆盖`)
+  }
+
+  for (const issue of report?.issues || []) {
+    const detail = String(issue.detail_zh || issue.title || '').trim().replace(/[。；;]+$/, '')
+    if (detail && suggestions.length < 3 && !suggestions.some((item) => item.includes(detail) || detail.includes(item))) suggestions.push(detail)
+  }
+
+  if (!suggestions.length) return `${opening}\n\n当前未发现需要优先处理的结构性问题。如需进一步调整语气、关键词或卖点排序，请直接告诉我。`
+  const numbered = suggestions.map((item, index) => `${index + 1}) ${item}；`).join('\n')
+  const hasBulletGap = Number.isFinite(actualBullets) && Number.isFinite(supportedBullets) && actualBullets < supportedBullets
+  const replyAction = hasBulletGap ? '补充' : '优化'
+  return `${opening}\n\n主要可优化点：\n${numbered}\n\n如需我继续处理以上优化，请回复“${replyAction}”。`
+})
 const historyItems = computed<HistoryItem[]>(() => runs.value.map(item => ({ id: item.run_id, title: item.title, status: item.status, updatedAt: item.updated_at, deletable: item.status !== 'running' && item.status !== 'queued' })))
 async function loadRuns() { runs.value = await api.service('listing-optimization', 'runs') }
 async function loadRun(id: string) { run.value = await api.service('listing-optimization', `runs/${id}`); source.value = run.value.source_text; input.value = ''; pendingMessage.value = ''; rounds.value = []; progress.value = ''; error.value = ''; localStorage.setItem('optimization-run', id); if (run.value.status === 'running' || run.value.status === 'queued') await watch(id) }
@@ -51,7 +90,7 @@ onMounted(async () => { await loadRuns(); const remembered = localStorage.getIte
     <ConversationHistoryDrawer v-model:open="historyOpen" title="Listing 优化" :items="historyItems" :selected-id="run?.run_id" :busy="processing" @create="reset" @select="loadRun" @rename="renameRun" @delete="deleteRun"/>
     <main class="chat-shell glass-panel"><header class="workspace-head"><div><p class="eyebrow">DIAGNOSE FIRST, THEN OPTIMIZE</p><h1>文案诊断与安全改写</h1><p>粘贴完整 Listing，先诊断、确认，再生成可复制上传稿</p></div></header>
       <div ref="chat" class="chat optimizer-chat"><div v-if="!source" class="message assistant"><span class="avatar">AI</span><div class="bubble">发送完整 Listing，我会先进行市场研究与规则诊断</div></div><div v-if="source" class="message user"><span class="avatar">你</span><pre class="bubble">{{ source }}</pre></div><OptimizationWorkflowMessage v-for="(message, index) in run?.workflow_messages || []" :key="`workflow-${index}`" :message="message"/><template v-if="!run?.workflow_messages?.length"><OptimizationWorkflowMessage v-if="status === 'completed' && result?.diagnosis_report" :message="{ role: 'assistant', status: 'awaiting_approval', result }"/><div v-for="(replyText, index) in run?.replies || []" :key="`legacy-reply-${index}`" class="message user"><span class="avatar">你</span><div class="bubble">{{ replyText }}</div></div></template>
-        <template v-if="status === 'completed'"><div class="message assistant"><span class="avatar">AI</span><div class="bubble">终稿已在右侧栏生成，可直接查看或复制。</div></div><div v-for="(message, index) in run?.chat_messages || []" :key="`chat-${index}`" class="message" :class="message.role"><span class="avatar">{{ message.role === 'user' ? '你' : 'AI' }}</span><div class="bubble">{{ message.content }}</div></div></template>
+        <template v-if="status === 'completed'"><div class="message assistant"><span class="avatar">AI</span><div class="bubble completion-summary">{{ completionSummary }}</div></div><div v-for="(message, index) in run?.chat_messages || []" :key="`chat-${index}`" class="message" :class="message.role"><span class="avatar">{{ message.role === 'user' ? '你' : 'AI' }}</span><div class="bubble">{{ message.content }}</div></div></template>
         <div v-if="result && status !== 'completed'" class="message assistant"><span class="avatar">AI</span><div class="bubble result-card">
           <template v-if="status === 'needs_clarification'"><h3>需要确认产品事实</h3><div v-for="question in result.questions" :key="question.code" class="question"><b>{{ question.question_zh || question.prompt_zh || question.question || question.code }}</b><p>{{ question.evidence_needed || question.reason_zh || question.reason }}</p></div><p class="muted">请在下方一次回复需要确认的事实；无法确认时可按问题提示保留现有安全稿</p></template>
           <template v-else-if="status === 'awaiting_approval'"><span class="success-tag">Stage 1 诊断完成</span><p>请审阅完整诊断报告，确认后生成上传稿</p><DiagnosisReport :report="result.diagnosis_report"/><button class="btn primary approval-button" :disabled="processing" @click="action('approve')">确认并生成上传稿</button></template>
@@ -70,4 +109,5 @@ onMounted(async () => { await loadRuns(); const remembered = localStorage.getIte
 .runtime-final .output { min-height: 320px; max-height: 48vh; resize: vertical; font-size: 12px; }
 .runtime-final .btn { width: 100%; }
 .runtime-gate-summary { margin: 10px 0; padding: 10px 12px; border-radius: 12px; background: hsl(0 0% 100% / .065); color: hsl(0 0% 100% / .76); box-shadow: inset 3px 0 0 hsl(0 0% 100% / .52); font-weight: 600; font-size: 12px; }
+.completion-summary { white-space: pre-wrap; }
 </style>
