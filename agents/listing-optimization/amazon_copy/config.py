@@ -215,6 +215,10 @@ class Settings(BaseSettings):
         default=_DEFAULT_CHECKPOINT_PATH,
         alias="CHECKPOINT_PATH",
     )
+    editorial_shadow_enabled: bool = Field(
+        default=True,
+        alias="EDITORIAL_SHADOW_ENABLED",
+    )
 
     @field_validator("listing_optimize_mcp_url")
     @classmethod

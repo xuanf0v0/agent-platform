@@ -6,6 +6,7 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from threading import RLock, Thread
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 from uuid import uuid4
@@ -24,6 +25,7 @@ from amazon_copy.automatic_models import (
     ProductIdentity,
 )
 from amazon_copy.config import Settings
+from amazon_copy.editorial_shadow import record_shadow_observation
 from amazon_copy.final_conversation import process_final_turn
 from amazon_copy.input_security import require_clarification_input, require_listing_input
 from amazon_copy.run_store import OptimizationRunStore, default_run_title
@@ -186,6 +188,24 @@ def _persist(run: RunState) -> None:
     )
 
 
+def _record_editorial_shadow_best_effort(run: RunState) -> None:
+    """Record a redacted completed-run observation without affecting the run."""
+    if not _settings.editorial_shadow_enabled or not isinstance(
+        run.result, CompletedOptimization
+    ):
+        return
+    path = Path(".amazon_copy/observations/editorial-shadow.jsonl")
+    try:
+        record_shadow_observation(
+            path,
+            run_id=run.run_id,
+            source_text=run.source_text,
+            result=run.result,
+        )
+    except Exception:  # noqa: BLE001 -- observation must never affect the main result
+        return
+
+
 def _get_run(run_id: str) -> RunState:
     with _runs_lock:
         run = _runs.get(run_id)
@@ -279,6 +299,7 @@ def _execute(run: RunState, context: AutomaticOptimizationContext) -> None:
     run.emit("result", status=result.status, result=result.model_dump(mode="json"))
     run.emit("done", status=result.status)
     _persist(run)
+    _record_editorial_shadow_best_effort(run)
 
 
 def _start_worker(run: RunState, context: AutomaticOptimizationContext) -> None:

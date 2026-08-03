@@ -50,6 +50,12 @@ Clarification answers resume from the source-bound research cache; they do not t
 MCP fetch. Programmatic callers that want the old one-shot behavior should pass
 `AutomaticOptimizationContext(skip_approval=True)` (or `mode="optimize"` with a valid token).
 
+Completed API runs also emit a best-effort, read-only editorial shadow observation to
+`.amazon_copy/observations/editorial-shadow.jsonl` when `EDITORIAL_SHADOW_ENABLED=true` (default).
+It reuses existing diagnosis/postflight scores, adds no model or MCP calls, never changes the
+publishable result, and stores only version/run metadata, hashes, scores, and stable issue codes.
+Set the flag to `false` to disable observation entirely.
+
 SellerSprite and Sorftime are optional priority-6, third-party-only MCP sources. They can contribute
 public market or keyword context, but they cannot verify private product facts, test/BOM evidence,
 or performance and safety claims. Such claims remain unresolved until supported by authoritative

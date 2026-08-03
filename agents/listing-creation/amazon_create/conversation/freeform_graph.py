@@ -15,6 +15,10 @@ from amazon_create.conversation.intake_parsing import (
     extract_short_asin_answer,
     normalize_asin,
 )
+from amazon_create.conversation.visual_guidance import (
+    load_visual_guidance,
+    visual_guidance_requested,
+)
 from amazon_create.llm import get_llm
 from amazon_create.research_bridge import load_asin_research_context, load_research_context
 from amazon_create.schemas.conversation import (
@@ -133,7 +137,7 @@ def _update_asin(state: ConversationGraphState, text: str) -> None:
 def _complete_turn(state: ConversationGraphState, settings: Settings) -> None:
     user_context = _reply_context(state, settings)
     reply = get_llm(settings, role="writer").complete(
-        _system_prompt(),
+        _system_prompt(state.messages),
         user_context,
         json_mode=False,
         temperature=0.7,
@@ -149,7 +153,7 @@ def stream_reply(
 ) -> Iterator[str]:
     """Stream one prompt-driven reply directly from the configured model."""
     yield from get_llm(settings, role="writer").stream(
-        _system_prompt(),
+        _system_prompt(state.messages),
         _reply_context(state, settings),
         json_mode=False,
         temperature=0.7,
@@ -287,11 +291,14 @@ def _run_llm_selected_tool(
     return None
 
 
-def _system_prompt() -> str:
+def _system_prompt(messages: list[ConversationMessage] | None = None) -> str:
     root = Path(__file__).resolve().parents[1]
     prompt = (root / "prompts" / "agents" / "creation_agent.md").read_text(encoding="utf-8")
     workflow = (root / "resources" / "amazon-listing-creation" / "SKILL.md").read_text(encoding="utf-8")
-    return f"{prompt}\n\n{workflow}"
+    base = f"{prompt}\n\n{workflow}"
+    if messages and visual_guidance_requested(messages):
+        return f"{base}\n\n{load_visual_guidance()}"
+    return base
 
 
 def _fact_extraction_prompt() -> str:

@@ -24,6 +24,7 @@ config:
   - {key: MAX_MCP_CALLS, label: Max MCP Calls, type: number, default: "20"}
   - {key: RUN_DEADLINE_SECONDS, label: Run Deadline, type: number, default: "120"}
   - {key: MAX_REVIEW_ROUNDS, label: Max Review Rounds, type: number, default: "2"}
+  - {key: EDITORIAL_SHADOW_ENABLED, label: Editorial Shadow, type: boolean, default: "true"}
   - {key: CHECKPOINT_PATH, label: Checkpoint Path, type: string, default: .amazon_copy/checkpoints.sqlite3}
   - {key: LISTING_OPTIMIZE_MCP_TOKEN, label: Listing Optimize Token, type: secret, default: ""}
   - {key: SELLERSPRITE_MCP_KEY, label: SellerSprite Key, type: secret, default: ""}
